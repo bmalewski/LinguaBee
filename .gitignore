@@ -34,5 +34,7 @@ __pycache__/
 # --- IDE / OS ---
 .vscode/
 .idea/
+.DS_Store
+._*
 Thumbs.db
 Desktop.ini
