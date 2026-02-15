@@ -1,0 +1,7 @@
+Podziel przesłany w pliku transkrypt na rozdziały. Każdy rozdział powinien:
+1. Mieć tytuł w formie pytania, zgodny z najczęściej wyszukiwanymi frazami w Google (SEO).
+2. Zawierać przedział czasowy w formacie [00:00:00], odzwierciedlający moment rozpoczęcia danego rozdziału w materiale.
+3. Być dopasowany tematycznie do treści transkryptu i przyciągać uwagę widzów.
+4. Gotowy podział zapisz w przejrzystej i czytelnej formie.
+5. Umieść rozdziały w bloku kodu.
+6. Dodaj rozdział średnio co 7% czasu trwania odcinka.

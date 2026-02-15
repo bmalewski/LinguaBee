@@ -1,0 +1,180 @@
+QWidget {
+    background-color: #ECEFF1;
+    color: #37474F;
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+QGroupBox {
+    background-color: #FFFFFF;
+    border: 1px solid #CFD8DC;
+    border-radius: 8px;
+    margin-top: 1em;
+    font-weight: bold;
+    padding: 15px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 10px;
+    margin-left: 10px;
+    color: #0288D1;
+}
+QLabel {
+    background-color: transparent;
+    font-weight: normal;
+    color: #546E7A;
+}
+QLineEdit {
+    background-color: #ECEFF1;
+    border: none;
+    border-bottom: 2px solid #78909C;
+    border-radius: 4px;
+    padding: 8px;
+    color: #263238;
+}
+QComboBox {
+    background-color: #ECEFF1;
+    border: none;
+    border-bottom: 2px solid #78909C;
+    border-radius: 4px;
+    padding: 6px;
+    color: #263238;
+}
+QComboBox QAbstractItemView {
+    border: 1px solid #CFD8DC;
+    border-radius: 4px;
+    background-color: #FFFFFF;
+    selection-background-color: #0288D1;
+    selection-color: #FFFFFF;
+}
+QComboBox QScrollBar:vertical {
+    border: none;
+    background: #CFD8DC;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+}
+QComboBox QScrollBar::handle:vertical {
+    background: #0288D1;
+    min-height: 20px;
+    border-radius: 5px;
+}
+QComboBox QScrollBar::handle:vertical:hover {
+    background: #039BE5;
+}
+QComboBox QScrollBar::add-line:vertical,
+QComboBox QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0px;
+    width: 0px;
+}
+QComboBox QScrollBar::add-page:vertical,
+QComboBox QScrollBar::sub-page:vertical {
+    background: none;
+}
+QLineEdit:focus, QComboBox:focus {
+    border-bottom: 2px solid #0288D1;
+}
+QComboBox::drop-down {
+    border: none;
+}
+QPushButton {
+    background-color: #B0BEC5;
+    color: #263238;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 18px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+QPushButton:hover {
+    background-color: #90A4AE;
+}
+QPushButton#StartButton {
+    background-color: #0288D1;
+    color: #FFFFFF;
+}
+QPushButton#StartButton:hover {
+    background-color: #039BE5;
+}
+QPushButton#StopButton {
+    background-color: #D32F2F;
+    color: #FFFFFF;
+}
+QPushButton#StopButton:hover {
+    background-color: #E53935;
+}
+QProgressBar {
+    border: none;
+    background-color: #B0BEC5;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: bold;
+    color: #FFFFFF;
+    min-height: 28px;
+    max-height: 28px;
+    margin-left: 40px;
+    margin-right: 40px;
+}
+QProgressBar::chunk {
+    background-color: #0288D1;
+    border-radius: 8px;
+}
+QCheckBox {
+    spacing: 8px;
+    color: #546E7A;
+}
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+}
+QCheckBox::indicator:unchecked {
+    border: 2px solid #78909C;
+    border-radius: 4px;
+    background-color: #ECEFF1;
+}
+QCheckBox::indicator:checked {
+    background-color: #0288D1;
+    border: 2px solid #0288D1;
+    border-radius: 4px;
+}
+QPlainTextEdit, QTextEdit {
+    background-color: black;
+    color: white;
+    font-weight: 600;
+}
+QPlainTextEdit QScrollBar:vertical,
+QTextEdit QScrollBar:vertical {
+    border: none;
+    background: #CFD8DC;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+}
+QPlainTextEdit QScrollBar::handle:vertical,
+QTextEdit QScrollBar::handle:vertical {
+    background: #0288D1;
+    min-height: 20px;
+    border-radius: 5px;
+}
+QPlainTextEdit QScrollBar::handle:vertical:hover,
+QTextEdit QScrollBar::handle:vertical:hover {
+    background: #039BE5;
+}
+QPlainTextEdit QScrollBar::add-line:vertical,
+QPlainTextEdit QScrollBar::sub-line:vertical,
+QTextEdit QScrollBar::add-line:vertical,
+QTextEdit QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0px;
+    width: 0px;
+}
+QPlainTextEdit QScrollBar::add-page:vertical,
+QPlainTextEdit QScrollBar::sub-page:vertical,
+QTextEdit QScrollBar::add-page:vertical,
+QTextEdit QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QSizeGrip {
+    width: 20px;
+}

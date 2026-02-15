@@ -1,0 +1,38 @@
+# --- Sekrety / klucze ---
+/gemini_api_key.txt
+/openai_api_key.txt
+*.key
+*.pem
+*.p12
+
+# --- Lokalna konfiguracja użytkownika ---
+/user_settings.json
+
+# --- Środowisko / build ---
+/venv
+/.venv
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# --- Dane lokalne / artefakty runtime ---
+/downloads
+/models
+/ollama_logs
+/ollama_diagnostic_response.txt
+
+# --- Narzędzia lokalne (jeśli są tylko pomocnicze i prywatne) ---
+/tools
+/scripts
+
+# --- Pliki packaging (lokalne) ---
+/linguabee-before-whisperx.yml
+/LinguaBee.spec
+/main.spec
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
