@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QLabel, QLineEdit,
     QComboBox, QCheckBox, QPushButton, QGroupBox,
-    QGridLayout, QSizePolicy, QHBoxLayout
+    QGridLayout, QSizePolicy
 )
 
 class SourceGroup(QGroupBox):

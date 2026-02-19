@@ -17,7 +17,31 @@ class OllamaTranslator:
         self.ollama_model_name = ollama_model_name
         self.status_callback = status_callback
 
-    def _create_user_prompt_text(self, text, src_lang_full, tgt_lang_full):
+    def _render_custom_prompt(self, custom_prompt, text, src_lang_full, tgt_lang_full):
+        prompt = (custom_prompt or "").strip()
+        if not prompt:
+            return ""
+
+        replacements = {
+            "{src_lang}": src_lang_full,
+            "{src_language}": src_lang_full,
+            "{src_lang_full}": src_lang_full,
+            "{tgt_lang}": tgt_lang_full,
+            "{tgt_language}": tgt_lang_full,
+            "{tgt_lang_full}": tgt_lang_full,
+            "{text}": text,
+        }
+        for key, value in replacements.items():
+            prompt = prompt.replace(key, value)
+
+        if "{text}" not in (custom_prompt or ""):
+            prompt = f"{prompt}\n\nTekst:\n{text}"
+        return prompt
+
+    def _create_user_prompt_text(self, text, src_lang_full, tgt_lang_full, custom_prompt=None):
+        custom_rendered = self._render_custom_prompt(custom_prompt, text, src_lang_full, tgt_lang_full)
+        if custom_rendered:
+            return custom_rendered
         # Use markers to avoid model adding commentary; translator usually returns plain text
         return f"""Jesteś ekspertem od tłumaczeń. Przetłumacz poniższy tekst z języka {src_lang_full} na język {tgt_lang_full}. Zwróć tylko i wyłącznie przetłumaczony tekst, bez żadnych dodatkowych zdań, komentarzy czy wyjaśnień.
 
@@ -156,15 +180,21 @@ Oto dane wejściowe:
         
         return {"translated_texts": []}
 
-    def translate(self, text, src_lang_full, tgt_lang_full):
+    def translate(self, text, src_lang_full, tgt_lang_full, custom_prompt=None):
         if not text.strip():
             return ""
-        prompt = self._create_user_prompt_text(text, src_lang_full, tgt_lang_full)
+        prompt = self._create_user_prompt_text(text, src_lang_full, tgt_lang_full, custom_prompt=custom_prompt)
         return self._call_ollama_api(prompt)
 
-    def translate_batch(self, texts: list, src_lang_full, tgt_lang_full):
+    def translate_batch(self, texts: list, src_lang_full, tgt_lang_full, custom_prompt=None):
         if not texts:
             return []
+
+        if custom_prompt and custom_prompt.strip():
+            out = []
+            for txt in texts:
+                out.append(self.translate(txt, src_lang_full, tgt_lang_full, custom_prompt=custom_prompt))
+            return out
         
         json_input = json.dumps({"texts_to_translate": texts}, ensure_ascii=False)
         prompt = self._create_user_prompt_batch(json_input, src_lang_full, tgt_lang_full)

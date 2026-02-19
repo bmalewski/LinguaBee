@@ -1,0 +1,6 @@
+Przetłumacz transkrypt wykonany w języku polskim przez model Whisper na język Ukraiński do filmu na YouTube xxx. Trzymaj się następujących wytycznych:
+1. Nie zmieniaj numeracji linii. Nie dodawaj nowych. Nie zmieniaj kodów czasowych. Zachowaj układ pliku srt.
+2. Popraw zgodnie z zasadami ukraińśkiej gramatyki i interpunkcji.
+3. Weź pod uwagę, że mogą pojawiać się w wypowiedzi słowa w innych językach, nazwiska zagranicznych pisarzy, teologów czy biblistów, postaci publicznych i historycznych
+4. Popraw ewidentne literówki.
+5. Popraw nazwy miejscowe, nazwy uczelni.

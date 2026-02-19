@@ -118,6 +118,10 @@ class TranscriptionConfig:
     correction_ollama_model_name: Optional[str] = None
     openrouter_model_name: Optional[str] = None
     correction_prompt: Optional[str] = None
+    transcription_segment_batch_size: int = 250
+    translation_ollama_prompt: Optional[str] = None
+    translation_openrouter_prompt: Optional[str] = None
+    translation_segment_batch_size: int = 250
     ollama_summary_prompt: Optional[str] = None
     summary_gemini_prompt: Optional[str] = None
     summary_openrouter_prompt: Optional[str] = None

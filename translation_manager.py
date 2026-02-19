@@ -1,6 +1,9 @@
 from text_utils import chunk_text, add_missing_spaces
 import httpx
 import time
+import json
+import ast
+import re
 from nllb_translator import NLLBTranslator
 from ollama_translator import OllamaTranslator
 try:
@@ -11,6 +14,125 @@ except ImportError:
 # This cache will be managed by the worker thread
 extern_nllb_translator_cache = {}
 extern_helsinki_translator_cache = {}
+TRANSLATION_SEGMENT_BATCH_SIZE = 250
+
+
+def _format_eta(eta_seconds: float) -> str:
+    if eta_seconds is None:
+        return "--:--"
+    if eta_seconds < 1:
+        return "<1s"
+    total = int(max(0, eta_seconds))
+    h = total // 3600
+    m = (total % 3600) // 60
+    s = total % 60
+    if h > 0:
+        return f"{h:02}:{m:02}:{s:02}"
+    return f"{m:02}:{s:02}"
+
+
+def _emit_segment_eta(status_signal, prefix: str, processed: int, total: int, started_at: float):
+    if not total:
+        return
+    elapsed = max(0.001, time.time() - started_at)
+    rate = processed / elapsed
+    remaining = max(0, total - processed)
+    eta_seconds = (remaining / rate) if rate > 0 else None
+    status_signal.emit(f"{prefix}: {processed}/{total} segmentów | ETA: {_format_eta(eta_seconds)}", "info")
+
+
+def _try_parse_json_array(response_text: str):
+    txt = (response_text or "").strip()
+    if not txt:
+        return None
+
+    txt = re.sub(r"^```(?:json)?\s*", "", txt, flags=re.IGNORECASE)
+    txt = re.sub(r"\s*```$", "", txt)
+
+    try:
+        parsed = json.loads(txt)
+        if isinstance(parsed, list):
+            return parsed
+    except Exception:
+        pass
+
+    try:
+        parsed = ast.literal_eval(txt)
+        if isinstance(parsed, list):
+            return parsed
+    except Exception:
+        pass
+
+    try:
+        candidates = re.findall(r"(\[[\s\S]*?\])", txt, re.DOTALL)
+        for cand in candidates:
+            try:
+                parsed = json.loads(cand)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                try:
+                    parsed = ast.literal_eval(cand)
+                    if isinstance(parsed, list):
+                        return parsed
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return None
+
+
+def _chunk_segments_for_translation(segments, max_items: int = TRANSLATION_SEGMENT_BATCH_SIZE):
+    chunks = []
+    current = []
+    for seg in segments or []:
+        if current and len(current) >= max_items:
+            chunks.append(current)
+            current = []
+        current.append(seg)
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _send_to_openrouter_translate_batch(
+    api_key: str,
+    model: str,
+    src_lang_full: str,
+    tgt_lang_full: str,
+    segment_texts: list,
+    custom_prompt: str = "",
+) -> list:
+    if not segment_texts:
+        return []
+
+    numbered = [f"{i + 1}. {str(t or '').strip()}" for i, t in enumerate(segment_texts)]
+    base_prompt = _build_custom_translation_prompt(custom_prompt, src_lang_full, tgt_lang_full, "\n".join(numbered))
+    if not base_prompt:
+        base_prompt = (
+            f"Przetłumacz z języka {src_lang_full} na język {tgt_lang_full}.\n"
+            "Otrzymasz numerowaną listę segmentów."
+        )
+
+    batch_prompt = (
+        base_prompt.strip()
+        + "\n\nINSTRUKCJA: Zwróć WYŁĄCZNIE JSON-ową listę stringów bez komentarzy i bez markdown."
+        + " Każdy element listy musi odpowiadać jednemu wejściowemu segmentowi, w tej samej kolejności."
+    )
+
+    response = _send_to_openrouter_translate(
+        api_key,
+        model,
+        src_lang_full,
+        tgt_lang_full,
+        "\n".join(numbered),
+        custom_prompt=batch_prompt,
+    )
+    parsed = _try_parse_json_array(response)
+    if not parsed:
+        return []
+    return [str(x).strip() for x in parsed]
 
 def translate(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped):
     if config.translation_model == "NLLB (lokalny)":
@@ -24,7 +146,30 @@ def translate(config, original_text, original_segments, whisper_info, status_sig
     return None, None
 
 
-def _send_to_openrouter_translate(api_key: str, model: str, src_lang_full: str, tgt_lang_full: str, input_text: str) -> str:
+def _build_custom_translation_prompt(custom_prompt: str, src_lang_full: str, tgt_lang_full: str, input_text: str) -> str:
+    prompt = (custom_prompt or "").strip()
+    if not prompt:
+        return ""
+
+    replacements = {
+        "{src_lang}": src_lang_full,
+        "{src_language}": src_lang_full,
+        "{src_lang_full}": src_lang_full,
+        "{tgt_lang}": tgt_lang_full,
+        "{tgt_language}": tgt_lang_full,
+        "{tgt_lang_full}": tgt_lang_full,
+        "{text}": input_text.strip(),
+    }
+    for key, value in replacements.items():
+        prompt = prompt.replace(key, value)
+
+    if "{text}" not in (custom_prompt or ""):
+        prompt = f"{prompt}\n\nTekst:\n{input_text.strip()}"
+
+    return prompt
+
+
+def _send_to_openrouter_translate(api_key: str, model: str, src_lang_full: str, tgt_lang_full: str, input_text: str, custom_prompt: str = "") -> str:
     if not api_key:
         return ""
 
@@ -33,10 +178,12 @@ def _send_to_openrouter_translate(api_key: str, model: str, src_lang_full: str, 
         "Jesteś tłumaczem. Tłumacz wiernie i naturalnie. "
         "Zwróć wyłącznie przetłumaczony tekst bez komentarzy i bez dodatkowych wyjaśnień."
     )
-    user_prompt = (
-        f"Przetłumacz z języka {src_lang_full} na język {tgt_lang_full}.\n\n"
-        f"Tekst:\n{input_text.strip()}"
-    )
+    user_prompt = _build_custom_translation_prompt(custom_prompt, src_lang_full, tgt_lang_full, input_text)
+    if not user_prompt:
+        user_prompt = (
+            f"Przetłumacz z języka {src_lang_full} na język {tgt_lang_full}.\n\n"
+            f"Tekst:\n{input_text.strip()}"
+        )
 
     payload = {
         "model": normalized_model,
@@ -174,6 +321,7 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
         return None, None
 
     translated_text_full, translated_segments_for_srt = None, None
+    segment_batch_size = max(1, int(getattr(config, 'translation_segment_batch_size', TRANSLATION_SEGMENT_BATCH_SIZE) or TRANSLATION_SEGMENT_BATCH_SIZE))
     formats_lower = [f.lower() for f in config.formats_translated]
     did_translation = False
 
@@ -251,8 +399,9 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
         status_signal.emit("Tłumaczenie segmentów dla SRT (NLLB)...", "info")
         progress_signal.emit(0)
         translated_segments_for_srt = []
+        started_at = time.time()
         
-        batch_size = 4 if config.nllb_variant == "3.3B" and config.nllb_device == "cuda" else 8
+        batch_size = segment_batch_size
         total_segments = len(original_segments)
         
         for i in range(0, total_segments, batch_size):
@@ -278,8 +427,15 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
                     translated_text = add_missing_spaces(translator.translate(segment_text, nllb_src_lang, nllb_tgt_lang)) if segment_text else ""
                     translated_segments_for_srt.append({"start": seg["start"], "end": seg["end"], "text": translated_text})
 
-            progress = min(int(((i + batch_size) / total_segments) * 100), 100)
+            progress = min(int(((i + len(batch)) / total_segments) * 100), 100)
             progress_signal.emit(progress)
+            _emit_segment_eta(
+                status_signal,
+                "NLLB SRT postęp",
+                min(i + len(batch), total_segments),
+                total_segments,
+                started_at,
+            )
 
         progress_signal.emit(100)
 
@@ -334,7 +490,9 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
     tgt_lang_full = lang_map.get(config.tgt_lang_code, config.tgt_lang_code)
     
     translated_text_full, translated_segments_for_srt = None, None
+    segment_batch_size = max(1, int(getattr(config, 'translation_segment_batch_size', TRANSLATION_SEGMENT_BATCH_SIZE) or TRANSLATION_SEGMENT_BATCH_SIZE))
     ollama_translator = OllamaTranslator(config.ollama_model_name)
+    custom_prompt = getattr(config, 'translation_ollama_prompt', None) or ""
     formats_lower = [f.lower() for f in config.formats_translated]
 
     try:
@@ -356,7 +514,12 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
                         translated_paragraphs.append("")
                         continue
                     
-                    translated_para_text = ollama_translator.translate(original_para_text, src_lang_full, tgt_lang_full)
+                    translated_para_text = ollama_translator.translate(
+                        original_para_text,
+                        src_lang_full,
+                        tgt_lang_full,
+                        custom_prompt=custom_prompt,
+                    )
 
                     speaker_label = ""
                     speakers = p.get('speakers')
@@ -379,7 +542,9 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
                 total_chunks = len(chunks)
                 for i, chk in enumerate(chunks):
                     if is_stopped(): return None, None
-                    translated_chunks.append(ollama_translator.translate(chk, src_lang_full, tgt_lang_full))
+                    translated_chunks.append(
+                        ollama_translator.translate(chk, src_lang_full, tgt_lang_full, custom_prompt=custom_prompt)
+                    )
                     if total_chunks > 0:
                         progress = ((i + 1) / total_chunks) * 100
                         progress_signal.emit(int(progress))
@@ -390,8 +555,9 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
             status_signal.emit(f"Tłumaczenie segmentów dla SRT (Ollama, model: {config.ollama_model_name})...", "info")
             progress_signal.emit(0)
             translated_segments_for_srt = []
+            started_at = time.time()
             
-            batch_size = 1
+            batch_size = segment_batch_size
             total_segments = len(original_segments)
             
             for i in range(0, total_segments, batch_size):
@@ -400,7 +566,12 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
                 batch = original_segments[i:i+batch_size]
                 texts_to_translate = [seg.get("text", "").strip() for seg in batch]
                 
-                translated_texts = ollama_translator.translate_batch(texts_to_translate, src_lang_full, tgt_lang_full)
+                translated_texts = ollama_translator.translate_batch(
+                    texts_to_translate,
+                    src_lang_full,
+                    tgt_lang_full,
+                    custom_prompt=custom_prompt,
+                )
 
                 if len(translated_texts) == len(batch):
                     for seg, translated_text in zip(batch, translated_texts):
@@ -416,11 +587,25 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
                         segment_text = seg.get("text", "").strip()
                         translated_text = ""
                         if segment_text:
-                            translated_text = add_missing_spaces(ollama_translator.translate(segment_text, src_lang_full, tgt_lang_full))
+                            translated_text = add_missing_spaces(
+                                ollama_translator.translate(
+                                    segment_text,
+                                    src_lang_full,
+                                    tgt_lang_full,
+                                    custom_prompt=custom_prompt,
+                                )
+                            )
                         translated_segments_for_srt.append({"start": seg["start"], "end": seg["end"], "text": translated_text})
 
-                progress = min(int(((i + batch_size) / total_segments) * 100), 100)
+                progress = min(int(((i + len(batch)) / total_segments) * 100), 100)
                 progress_signal.emit(progress)
+                _emit_segment_eta(
+                    status_signal,
+                    "Ollama SRT postęp",
+                    min(i + len(batch), total_segments),
+                    total_segments,
+                    started_at,
+                )
 
             progress_signal.emit(100)
 
@@ -438,6 +623,7 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
         return None, None
 
     model_name = getattr(config, 'translation_openrouter_model_name', None) or "google/gemini-2.5-flash"
+    custom_prompt = getattr(config, 'translation_openrouter_prompt', None) or ""
 
     src_lang_code = config.translation_src_lang_code
     if not src_lang_code or src_lang_code == 'auto':
@@ -454,6 +640,7 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
     tgt_lang_full = lang_map.get(config.tgt_lang_code, config.tgt_lang_code)
 
     translated_text_full, translated_segments_for_srt = None, None
+    segment_batch_size = max(1, int(getattr(config, 'translation_segment_batch_size', TRANSLATION_SEGMENT_BATCH_SIZE) or TRANSLATION_SEGMENT_BATCH_SIZE))
     formats_lower = [f.lower() for f in config.formats_translated]
 
     try:
@@ -480,6 +667,7 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
                         src_lang_full,
                         tgt_lang_full,
                         original_para_text,
+                        custom_prompt=custom_prompt,
                     )
 
                     speaker_label = ""
@@ -501,7 +689,14 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
                     if is_stopped():
                         return None, None
                     translated_chunks.append(
-                        _send_to_openrouter_translate(api_key, model_name, src_lang_full, tgt_lang_full, chk)
+                        _send_to_openrouter_translate(
+                            api_key,
+                            model_name,
+                            src_lang_full,
+                            tgt_lang_full,
+                            chk,
+                            custom_prompt=custom_prompt,
+                        )
                     )
                     if total_chunks > 0:
                         progress_signal.emit(int(((i + 1) / total_chunks) * 100))
@@ -513,22 +708,59 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
             progress_signal.emit(0)
             translated_segments_for_srt = []
             total_segments = len(original_segments)
+            started_at = time.time()
 
-            for i, seg in enumerate(original_segments):
+            chunks = _chunk_segments_for_translation(original_segments, max_items=segment_batch_size)
+            for idx, chunk in enumerate(chunks):
                 if is_stopped():
                     return None, None
-                src_text = seg.get("text", "").strip()
-                out_text = ""
-                if src_text:
-                    out_text = _send_to_openrouter_translate(api_key, model_name, src_lang_full, tgt_lang_full, src_text)
-                    out_text = add_missing_spaces(out_text)
-                translated_segments_for_srt.append({
-                    "start": seg.get("start"),
-                    "end": seg.get("end"),
-                    "text": out_text,
-                })
+
+                src_texts = [str(seg.get("text", "")).strip() for seg in chunk]
+                translated_batch = _send_to_openrouter_translate_batch(
+                    api_key,
+                    model_name,
+                    src_lang_full,
+                    tgt_lang_full,
+                    src_texts,
+                    custom_prompt=custom_prompt,
+                )
+
+                if len(translated_batch) != len(chunk):
+                    status_signal.emit(
+                        f"OpenRouter batch {idx + 1}/{len(chunks)}: niepełna odpowiedź ({len(translated_batch)}/{len(chunk)}), fallback na pojedyncze segmenty.",
+                        "warning",
+                    )
+                    translated_batch = []
+                    for src_text in src_texts:
+                        out_text = ""
+                        if src_text:
+                            out_text = _send_to_openrouter_translate(
+                                api_key,
+                                model_name,
+                                src_lang_full,
+                                tgt_lang_full,
+                                src_text,
+                                custom_prompt=custom_prompt,
+                            )
+                        translated_batch.append(out_text)
+
+                for seg, out_text in zip(chunk, translated_batch):
+                    translated_segments_for_srt.append({
+                        "start": seg.get("start"),
+                        "end": seg.get("end"),
+                        "text": add_missing_spaces(str(out_text).strip()),
+                    })
+
                 if total_segments > 0:
-                    progress_signal.emit(int(((i + 1) / total_segments) * 100))
+                    processed = min((idx + 1) * segment_batch_size, total_segments)
+                    progress_signal.emit(int((processed / total_segments) * 100))
+                    _emit_segment_eta(
+                        status_signal,
+                        "OpenRouter SRT postęp",
+                        processed,
+                        total_segments,
+                        started_at,
+                    )
 
             progress_signal.emit(100)
 
@@ -593,6 +825,7 @@ def translate_helsinki(config, original_text, original_segments, whisper_info, s
     translator = extern_helsinki_translator_cache[translator_key]
 
     translated_text_full, translated_segments_for_srt = None, None
+    segment_batch_size = max(1, int(getattr(config, 'translation_segment_batch_size', TRANSLATION_SEGMENT_BATCH_SIZE) or TRANSLATION_SEGMENT_BATCH_SIZE))
     formats_lower = [f.lower() for f in config.formats_translated]
     did_translation = False
 
@@ -663,8 +896,9 @@ def translate_helsinki(config, original_text, original_segments, whisper_info, s
         did_translation = True
         status_signal.emit(f"Tłumaczenie segmentów dla SRT (Helsinki-NLP, model: {model_name})...", "info")
         progress_signal.emit(0)
+        started_at = time.time()
         
-        batch_size = 16 # Modele Helsinki są małe, możemy użyć większego batcha
+        batch_size = segment_batch_size
         texts_to_translate = [seg.get("text", "").strip() for seg in original_segments]
         translated_texts = []
         total_segments = len(texts_to_translate)
@@ -676,6 +910,13 @@ def translate_helsinki(config, original_text, original_segments, whisper_info, s
             translated_texts.extend(translated_batch)
             progress = min(int(((i + len(batch_texts)) / total_segments) * 100), 100)
             progress_signal.emit(progress)
+            _emit_segment_eta(
+                status_signal,
+                "Helsinki SRT postęp",
+                min(i + len(batch_texts), total_segments),
+                total_segments,
+                started_at,
+            )
 
         translated_segments_for_srt = []
         if len(original_segments) == len(translated_texts):

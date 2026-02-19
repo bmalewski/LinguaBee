@@ -1,5 +1,6 @@
 import os
 import time
+import re
 
 # UI / Qt imports
 from PySide6.QtWidgets import (
@@ -20,7 +21,7 @@ from gui.dialogs import (
     WhisperSettingsDialog, NllbSettingsDialog, OllamaSettingsDialog, BartSummarizationSettingsDialog, DiarizationDialog,
     CorrectionSettingsDialog, GeminiCorrectionSettingsDialog, OpenRouterCorrectionSettingsDialog,
     OllamaSummarySettingsDialog, GeminiSummarySettingsDialog, OpenRouterSummarySettingsDialog,
-    OpenRouterTranslationSettingsDialog
+    OpenRouterTranslationSettingsDialog, OllamaTranslationSettingsDialog
 )
 
 # torch / CUDA detection
@@ -49,9 +50,11 @@ class MainWindow(QMainWindow):
         self.whisper_enable_denoising = False
         self.whisper_enable_normalization = False
         self.whisper_force_mono = True
+        self.transcription_segment_batch_size = 250
         self.nllb_variant = None
         self.nllb_device = "cpu"
         self.nllb_device_index = 0
+        self.translation_segment_batch_size = 250
         self.hf_summary_model_name = "mtj/bart-base-polish-summarization"
         self.hf_summary_device = "cpu"
         self.hf_summary_device_index = 0
@@ -59,7 +62,9 @@ class MainWindow(QMainWindow):
         self.hf_summary_min_length = 30
         self.hf_summary_num_beams = 4
         self.ollama_model_name = ""
+        self.ollama_translation_prompt = ""
         self.translation_openrouter_model_name = "google/gemini-2.5-flash"
+        self.translation_openrouter_prompt = ""
         self.ollama_summary_model_name = ""
         self.ollama_summary_prompt = ""
         self.bart_summary_prompt = ""
@@ -160,6 +165,7 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
+        self.current_eta = "--:--"
         
         self.start_btn = QPushButton("Start")
         self.start_btn.setObjectName("StartButton")
@@ -314,6 +320,13 @@ class MainWindow(QMainWindow):
             return
         # Insert HTML at the end of the QTextEdit using a QTextCursor
         try:
+            try:
+                m = re.search(r"ETA:\s*([^\s]+)", str(msg))
+                if m:
+                    self.current_eta = m.group(1).strip()
+                    self.progress_bar.setFormat(f"%p% | ETA: {self.current_eta}")
+            except Exception:
+                pass
             html = f'<span style="color:#888;">[{current_time}] </span><span style="color:{color};">{msg}</span><br/>'
             cursor = self.log_box.textCursor()
             cursor.movePosition(QTextCursor.End)
@@ -389,13 +402,15 @@ class MainWindow(QMainWindow):
                 self.whisper_enable_normalization,
                 self.whisper_force_mono,
                 self.enable_diarization,
-                self.diarization_num_speakers
+                self.diarization_num_speakers,
+                self.transcription_segment_batch_size,
             )
             if dialog.exec():
                 settings = dialog.get_settings()
                 (self.whisper_variant, device_settings, self.whisper_delete_audio, 
                  self.whisper_enable_paragraphing, self.whisper_enable_denoising, self.whisper_enable_normalization, 
-                 self.whisper_force_mono, self.enable_diarization, self.diarization_num_speakers) = settings
+                 self.whisper_force_mono, self.enable_diarization, self.diarization_num_speakers,
+                 self.transcription_segment_batch_size) = settings
                 self.whisper_device = device_settings['device']
                 self.whisper_device_index = device_settings.get('device_index', 0)
                 self.append_log(f"Ustawiono Whisper: {self.whisper_variant}, {self.whisper_device}", "info")
@@ -420,30 +435,46 @@ class MainWindow(QMainWindow):
     def open_translation_settings(self, index):
         model = self.translation_group.translation_combo.itemText(index)
         if model == "NLLB (lokalny)":
-            dialog = NllbSettingsDialog(self, self.available_devices, self.nllb_variant, self.nllb_device, self.nllb_device_index)
+            dialog = NllbSettingsDialog(
+                self,
+                self.available_devices,
+                self.nllb_variant,
+                self.nllb_device,
+                self.nllb_device_index,
+                self.translation_segment_batch_size,
+            )
             if dialog.exec():
-                self.nllb_variant, device_settings = dialog.get_settings()
+                self.nllb_variant, device_settings, self.translation_segment_batch_size = dialog.get_settings()
                 self.nllb_device = device_settings['device']
                 self.nllb_device_index = device_settings.get('device_index', 0)
                 self.append_log(f"Ustawiono NLLB: {self.nllb_variant}, {self.nllb_device}", "info")
                 # persist
                 self._save_current_settings()
         elif model == "Ollama (lokalny)":
-            dialog = OllamaSettingsDialog(self, self.ollama_model_name)
+            dialog = OllamaTranslationSettingsDialog(
+                self,
+                current_model=self.ollama_model_name,
+                current_prompt=self.ollama_translation_prompt,
+                current_translation_segment_batch_size=self.translation_segment_batch_size,
+            )
             if dialog.exec():
-                self.ollama_model_name = dialog.get_settings()
+                self.ollama_model_name, self.ollama_translation_prompt, self.translation_segment_batch_size = dialog.get_settings()
                 self.append_log(f"Ustawiono model Ollama dla tłumaczenia: {self.ollama_model_name}", "info")
                 self._save_current_settings()
         elif model == "OpenRouter (API)":
             dialog = OpenRouterTranslationSettingsDialog(
                 self,
                 current_key=self.openrouter_key,
+                current_prompt=self.translation_openrouter_prompt,
                 current_model=self.translation_openrouter_model_name,
+                current_translation_segment_batch_size=self.translation_segment_batch_size,
             )
             if dialog.exec():
-                key, model_name = dialog.get_settings()
+                key, prompt, model_name, batch_size = dialog.get_settings()
                 self.openrouter_key = key
+                self.translation_openrouter_prompt = prompt
                 self.translation_openrouter_model_name = model_name or "google/gemini-2.5-flash"
+                self.translation_segment_batch_size = int(batch_size or self.translation_segment_batch_size)
                 try:
                     st = load_settings() or {}
                     st['openrouter_key'] = self.openrouter_key
@@ -465,11 +496,17 @@ class MainWindow(QMainWindow):
                 self.append_log(f"Ustawiono Korektę: model={model_name}", "info")
                 self._save_current_settings()
         elif model == "Gemini (API)":
-            dlg = GeminiCorrectionSettingsDialog(self, current_key=self.gemini_key, current_prompt=self.correction_prompt)
+            dlg = GeminiCorrectionSettingsDialog(
+                self,
+                current_key=self.gemini_key,
+                current_prompt=self.correction_prompt,
+                current_transcription_segment_batch_size=self.transcription_segment_batch_size,
+            )
             if dlg.exec():
-                key, prompt = dlg.get_settings()
+                key, prompt, batch_size = dlg.get_settings()
                 self.gemini_key = key
                 self.correction_prompt = prompt
+                self.transcription_segment_batch_size = int(batch_size or self.transcription_segment_batch_size)
                 # persist
                 try:
                     st = load_settings() or {}
@@ -485,12 +522,14 @@ class MainWindow(QMainWindow):
                 current_key=self.openrouter_key,
                 current_prompt=self.correction_prompt,
                 current_model=self.openrouter_model_name,
+                current_transcription_segment_batch_size=self.transcription_segment_batch_size,
             )
             if dlg.exec():
-                key, prompt, model_name = dlg.get_settings()
+                key, prompt, model_name, batch_size = dlg.get_settings()
                 self.openrouter_key = key
                 self.correction_prompt = prompt
                 self.openrouter_model_name = model_name or "google/gemini-2.5-flash"
+                self.transcription_segment_batch_size = int(batch_size or self.transcription_segment_batch_size)
                 try:
                     st = load_settings() or {}
                     st['openrouter_key'] = self.openrouter_key
@@ -590,7 +629,9 @@ class MainWindow(QMainWindow):
             self.hf_summary_num_beams = settings.get('hf_summary_num_beams', self.hf_summary_num_beams)
             self.bart_summary_prompt = settings.get('bart_summary_prompt', self.bart_summary_prompt)
             self.ollama_model_name = settings.get('ollama_model_name', self.ollama_model_name)
+            self.ollama_translation_prompt = settings.get('ollama_translation_prompt', self.ollama_translation_prompt)
             self.translation_openrouter_model_name = settings.get('translation_openrouter_model_name', self.translation_openrouter_model_name)
+            self.translation_openrouter_prompt = settings.get('translation_openrouter_prompt', self.translation_openrouter_prompt)
             self.ollama_summary_model_name = settings.get('ollama_summary_model_name', self.ollama_summary_model_name)
             self.ollama_summary_prompt = settings.get('ollama_summary_prompt', self.ollama_summary_prompt)
             self.summary_gemini_prompt = settings.get('summary_gemini_prompt', self.summary_gemini_prompt)
@@ -600,6 +641,8 @@ class MainWindow(QMainWindow):
             self.whisper_enable_denoising = settings.get('enable_denoising', self.whisper_enable_denoising)
             self.whisper_enable_normalization = settings.get('enable_normalization', self.whisper_enable_normalization)
             self.whisper_force_mono = settings.get('force_mono', self.whisper_force_mono)
+            self.transcription_segment_batch_size = settings.get('transcription_segment_batch_size', self.transcription_segment_batch_size)
+            self.translation_segment_batch_size = settings.get('translation_segment_batch_size', self.translation_segment_batch_size)
 
             # Diarization
             self.diarization_num_speakers = settings.get('diarization_num_speakers', self.diarization_num_speakers)
@@ -686,7 +729,9 @@ class MainWindow(QMainWindow):
                 'hf_summary_num_beams': self.hf_summary_num_beams,
                 'bart_summary_prompt': self.bart_summary_prompt,
                 'ollama_model_name': self.ollama_model_name,
+                'ollama_translation_prompt': self.ollama_translation_prompt,
                 'translation_openrouter_model_name': self.translation_openrouter_model_name,
+                'translation_openrouter_prompt': self.translation_openrouter_prompt,
                 'translation_model': self.translation_group.translation_combo.currentText(),
                 'translation_src_language': self.translation_group.translation_src_lang_combo.currentText(),
                 'translation_tgt_language': self.translation_group.tgt_lang_combo.currentText(),
@@ -701,13 +746,15 @@ class MainWindow(QMainWindow):
                 'enable_denoising': self.whisper_enable_denoising,
                 'enable_normalization': self.whisper_enable_normalization,
                 'force_mono': self.whisper_force_mono,
+                'transcription_segment_batch_size': self.transcription_segment_batch_size,
+                'translation_segment_batch_size': self.translation_segment_batch_size,
                 'enable_diarization': self.enable_diarization,
                 'diarization_num_speakers': self.diarization_num_speakers,
 
                 'formats_original': [cb.text() for cb in getattr(self.formats_group, 'original_checkboxes', []) if cb.isChecked()],
                 'formats_translated': [cb.text() for cb in getattr(self.formats_group, 'translated_checkboxes', []) if cb.isChecked()],
-                'formats_summary': [cb.text() for cb in getattr(self.formats_group, 'summary_checkboxes', []) if cb.isChecked()]
-                ,
+                'formats_summary': [cb.text() for cb in getattr(self.formats_group, 'summary_checkboxes', []) if cb.isChecked()],
+                
                 'transcription_correction': self.transcription_group.correction_combo.currentText(),
                 'correction_ollama_model_name': self.correction_ollama_model_name,
                 'correction_prompt': self.correction_prompt,
@@ -801,14 +848,24 @@ class MainWindow(QMainWindow):
             self.append_log("Uruchomienie: nie udało się wygenerować podsumowania konfiguracji.", "warning")
 
         self.progress_bar.setValue(0)
+        self.current_eta = "--:--"
+        self.progress_bar.setFormat(f"%p% | ETA: {self.current_eta}")
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
 
         self.thread = TranscriptionThread(config)
-        self.thread.progress_signal.connect(self.progress_bar.setValue)
+        self.thread.progress_signal.connect(self._on_progress_updated)
         self.thread.status_signal.connect(self.append_log)
         self.thread.finished_signal.connect(self.on_finished)
         self.thread.start()
+
+    @Slot(int)
+    def _on_progress_updated(self, value: int):
+        try:
+            self.progress_bar.setValue(int(value))
+            self.progress_bar.setFormat(f"%p% | ETA: {self.current_eta}")
+        except Exception:
+            self.progress_bar.setValue(value)
 
 
     def get_transcription_config(self):
@@ -827,6 +884,9 @@ class MainWindow(QMainWindow):
             whisper_device_index=self.whisper_device_index,
             translation_model=self.translation_group.translation_combo.currentText(),
             translation_openrouter_model_name=self.translation_openrouter_model_name,
+            translation_openrouter_prompt=self.translation_openrouter_prompt,
+            translation_ollama_prompt=self.ollama_translation_prompt,
+            translation_segment_batch_size=self.translation_segment_batch_size,
             nllb_variant=self.nllb_variant,
             nllb_device=self.nllb_device,
             nllb_device_index=self.nllb_device_index,
@@ -854,6 +914,7 @@ class MainWindow(QMainWindow):
             transcription_correction=self.transcription_group.correction_combo.currentText(),
             correction_ollama_model_name=self.correction_ollama_model_name,
             correction_prompt=self.correction_prompt,
+            transcription_segment_batch_size=self.transcription_segment_batch_size,
             src_lang_code=src_lang_code,
             translation_src_lang_code=translation_src_lang_code,
             tgt_lang_code=tgt_lang_code,
@@ -878,5 +939,7 @@ class MainWindow(QMainWindow):
 
     def on_finished(self, msg, msg_type):
         QMessageBox.information(self, "Gotowe", msg) if msg_type == "success" else QMessageBox.critical(self, "Błąd", msg)
+        self.current_eta = "--:--"
+        self.progress_bar.setFormat("%p%")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)

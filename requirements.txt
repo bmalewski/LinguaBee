@@ -27,7 +27,7 @@ pyannote.audio
 
 # Translation / summarization models
 transformers
-ctranslate2
+ctranslate2>=4.7.1
 sentencepiece
 sacremoses
 huggingface-hub

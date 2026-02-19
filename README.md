@@ -186,8 +186,6 @@ Zainstaluj FFmpeg i upewnij się, że binarka jest w `PATH`.
 - sprawdź sterowniki NVIDIA,
 - dla CPU projekt też działa (wolniej).
 
----
-
 ## 7) Aktualizacja projektu
 
 W katalogu projektu:

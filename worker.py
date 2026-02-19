@@ -279,14 +279,14 @@ def _redact_api_key_in_message(msg: str, api_key: str) -> str:
     return str(msg)
 
 
-def _chunk_srt_segments(segments, max_items: int = 200, max_chars: int = 2000):
+def _chunk_srt_segments(segments, max_items: int = 250, max_chars: int = None):
     chunks = []
     current = []
     current_chars = 0
     for seg in segments or []:
         txt = str(seg.get("text", "")).strip()
         add_len = len(txt) + 8
-        if current and (len(current) >= max_items or (current_chars + add_len) > max_chars):
+        if current and (len(current) >= max_items or (max_chars is not None and (current_chars + add_len) > max_chars)):
             chunks.append(current)
             current = []
             current_chars = 0
@@ -297,10 +297,25 @@ def _chunk_srt_segments(segments, max_items: int = 200, max_chars: int = 2000):
     return chunks
 
 
+def _format_eta(eta_seconds: float) -> str:
+    if eta_seconds is None:
+        return "--:--"
+    if eta_seconds < 1:
+        return "<1s"
+    total = int(max(0, eta_seconds))
+    h = total // 3600
+    m = (total % 3600) // 60
+    s = total % 60
+    if h > 0:
+        return f"{h:02}:{m:02}:{s:02}"
+    return f"{m:02}:{s:02}"
+
+
 def _correct_srt_with_gemini_batched(
     api_key: str,
     prompt: str,
     file_segments: list,
+    batch_size: int = 250,
     model: str = "gemini-2.5-flash",
     status_cb=None,
     progress_cb=None,
@@ -308,7 +323,7 @@ def _correct_srt_with_gemini_batched(
     if not file_segments:
         return []
 
-    chunks = _chunk_srt_segments(file_segments)
+    chunks = _chunk_srt_segments(file_segments, max_items=max(1, int(batch_size or 250)))
     try:
         if progress_cb:
             progress_cb(0)
@@ -316,6 +331,8 @@ def _correct_srt_with_gemini_batched(
         pass
 
     corrected_lines = []
+    started_at = time.time()
+    total_segments = len(file_segments)
     for idx, chunk in enumerate(chunks):
         try:
             if status_cb:
@@ -358,6 +375,17 @@ def _correct_srt_with_gemini_batched(
         except Exception:
             pass
 
+        try:
+            if status_cb and total_segments > 0:
+                processed = min(len(corrected_lines), total_segments)
+                elapsed = max(0.001, time.time() - started_at)
+                rate = processed / elapsed
+                remaining = max(0, total_segments - processed)
+                eta_seconds = (remaining / rate) if rate > 0 else None
+                status_cb(f"Korekta Gemini SRT postęp: {processed}/{total_segments} segmentów | ETA: {_format_eta(eta_seconds)}", "info")
+        except Exception:
+            pass
+
         if idx < len(chunks) - 1:
             time.sleep(4.0)
 
@@ -370,6 +398,7 @@ def _correct_srt_with_openrouter_batched(
     api_key: str,
     prompt: str,
     file_segments: list,
+    batch_size: int = 250,
     model: str = "google/gemini-2.5-flash",
     status_cb=None,
     progress_cb=None,
@@ -377,7 +406,7 @@ def _correct_srt_with_openrouter_batched(
     if not file_segments:
         return []
 
-    chunks = _chunk_srt_segments(file_segments)
+    chunks = _chunk_srt_segments(file_segments, max_items=max(1, int(batch_size or 250)))
     try:
         if progress_cb:
             progress_cb(0)
@@ -385,6 +414,8 @@ def _correct_srt_with_openrouter_batched(
         pass
 
     corrected_lines = []
+    started_at = time.time()
+    total_segments = len(file_segments)
     for idx, chunk in enumerate(chunks):
         try:
             if status_cb:
@@ -424,6 +455,17 @@ def _correct_srt_with_openrouter_batched(
             if progress_cb:
                 pct = int(((idx + 1) / max(1, len(chunks))) * 100)
                 progress_cb(max(0, min(100, pct)))
+        except Exception:
+            pass
+
+        try:
+            if status_cb and total_segments > 0:
+                processed = min(len(corrected_lines), total_segments)
+                elapsed = max(0.001, time.time() - started_at)
+                rate = processed / elapsed
+                remaining = max(0, total_segments - processed)
+                eta_seconds = (remaining / rate) if rate > 0 else None
+                status_cb(f"Korekta OpenRouter SRT postęp: {processed}/{total_segments} segmentów | ETA: {_format_eta(eta_seconds)}", "info")
         except Exception:
             pass
 
@@ -1128,6 +1170,7 @@ class TranscriptionThread(QThread):
                                                         gem_key,
                                                         corr_prompt,
                                                         file_segments,
+                                                        batch_size=getattr(self.config, 'transcription_segment_batch_size', 250),
                                                         model="gemini-2.5-flash",
                                                         status_cb=self.status_signal.emit,
                                                         progress_cb=self.progress_signal.emit
@@ -1150,6 +1193,7 @@ class TranscriptionThread(QThread):
                                                         or_key,
                                                         corr_prompt,
                                                         file_segments,
+                                                        batch_size=getattr(self.config, 'transcription_segment_batch_size', 250),
                                                         model=or_model,
                                                         status_cb=self.status_signal.emit,
                                                         progress_cb=self.progress_signal.emit
