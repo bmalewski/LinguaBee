@@ -300,10 +300,8 @@ class MainWindow(QMainWindow):
             self.translation_group.translation_src_lang_combo.setEnabled(False)
             self.translation_group.tgt_lang_combo.setEnabled(False)
         else:
-            selected_translation_model = self.translation_group.translation_combo.currentText()
-            is_any_translation_selected = selected_translation_model != "Brak"
-            self.translation_group.translation_src_lang_combo.setEnabled(is_any_translation_selected)
-            self.translation_group.tgt_lang_combo.setEnabled(is_any_translation_selected)
+            self.translation_group.translation_src_lang_combo.setEnabled(True)
+            self.translation_group.tgt_lang_combo.setEnabled(True)
 
 
     @Slot(str, str)

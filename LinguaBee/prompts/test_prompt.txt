@@ -1,1 +1,0 @@
-Popraw interpunkcję, kapitalizację i oczywiste artefakty transkrypcji. Zachowaj kolejność segmentów. Dla każdego segmentu zwróć tylko poprawiony tekst bez dodatkowych komentarzy, oddzielając segmenty tokenem ' ||| '.
