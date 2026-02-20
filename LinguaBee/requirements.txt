@@ -1,0 +1,36 @@
+# LinguaBee - pełne zależności runtime
+
+# GPU (CUDA) - zostaw, jeśli używasz GPU. Dla CPU możesz usunąć tę linię.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch
+
+# GUI
+PySide6
+
+# Core HTTP / API
+httpx
+
+# Download / media input
+yt-dlp
+av
+
+# Audio processing
+librosa
+soundfile
+pydub
+noisereduce
+
+# ASR / alignment / diarization
+faster-whisper
+whisperx
+pyannote.audio
+
+# Translation / summarization models
+transformers
+ctranslate2>=4.7.1
+sentencepiece
+sacremoses
+huggingface-hub
+
+# Document outputs
+python-docx
