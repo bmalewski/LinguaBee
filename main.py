@@ -61,10 +61,10 @@ def _load_stylesheet(app: QApplication):
 def _apply_readable_font(app: QApplication):
     """Apply a consistent, readable UI font across platforms.
 
-    Calibri baseline profile for quick typography comparison.
+    Segoe UI baseline profile for quick typography comparison.
     """
     try:
-        app.setFont(QFont("Calibri", 13))
+        app.setFont(QFont("Segoe UI", 13))
     except Exception:
         pass
 

@@ -31,10 +31,10 @@ class TranscriptionGroup(QGroupBox):
         super().__init__("Transkrypcja", parent)
         self.layout = QGridLayout(self)
         # uniform spacing & margins so rows align visually with other groups
-        self.layout.setVerticalSpacing(6)
+        self.layout.setVerticalSpacing(4)
         self.layout.setHorizontalSpacing(8)
         # keep symmetric top/bottom margins so the group padding is balanced
-        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.layout.setContentsMargins(6, 4, 6, 4)
         self.model_combo = QComboBox()
         self.model_combo.addItems(["Brak", "Whisper (lokalny)"])
         self.model_combo.setCurrentText("Whisper (lokalny)")
@@ -82,7 +82,7 @@ class TranscriptionGroup(QGroupBox):
 
         # Use only 3 rows and slightly smaller row height so the groupbox hugs the last widget
         for r in range(3):
-            self.layout.setRowMinimumHeight(r, 22)
+            self.layout.setRowMinimumHeight(r, 20)
         self.layout.setColumnStretch(1, 1)
 
 class TranslationGroup(QGroupBox):
@@ -90,10 +90,10 @@ class TranslationGroup(QGroupBox):
         super().__init__("Tłumaczenie", parent)
         self.layout = QGridLayout(self)
         # uniform spacing & margins so rows align visually with other groups
-        self.layout.setVerticalSpacing(6)
+        self.layout.setVerticalSpacing(4)
         self.layout.setHorizontalSpacing(8)
         # keep symmetric top/bottom margins so the group padding is balanced
-        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.layout.setContentsMargins(6, 4, 6, 4)
         self.translation_combo = QComboBox()
         # Removed OpenAI and Gemini options per user request
         self.translation_combo.addItems(["Brak", "NLLB (lokalny)", "Helsinki (lokalny)", "Ollama (lokalny)", "OpenRouter (API)"])
@@ -145,7 +145,7 @@ class TranslationGroup(QGroupBox):
         self.layout.addWidget(self.tgt_lang_combo, 2, 1)
         # Match TranscriptionGroup: 3 rows with smaller minimum height
         for r in range(3):
-            self.layout.setRowMinimumHeight(r, 22)
+            self.layout.setRowMinimumHeight(r, 20)
         self.layout.setColumnStretch(1, 1)
 
 class SummaryGroup(QGroupBox):
@@ -153,10 +153,10 @@ class SummaryGroup(QGroupBox):
         super().__init__("Streszczenie", parent)
         self.layout = QGridLayout(self)
         # uniform spacing & margins so rows align visually with other groups
-        self.layout.setVerticalSpacing(6)
+        self.layout.setVerticalSpacing(4)
         self.layout.setHorizontalSpacing(8)
         # keep symmetric top/bottom margins so the group padding is balanced
-        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.layout.setContentsMargins(6, 4, 6, 4)
         self.summary_combo = QComboBox()
         self.summary_combo.addItems(["Brak", "Ollama (lokalny)", "Gemini (API)", "OpenRouter (API)", "BART (lokalny)"])
         self.summary_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -201,7 +201,7 @@ class SummaryGroup(QGroupBox):
         self.layout.addWidget(self.summary_lang_combo, 1, 1)
         # Summary group is smaller: 2 rows with the same reduced height
         for r in range(2):
-            self.layout.setRowMinimumHeight(r, 22)
+            self.layout.setRowMinimumHeight(r, 20)
         self.layout.setColumnStretch(1, 1)
 
 class FormatsGroup(QGroupBox):
@@ -209,9 +209,9 @@ class FormatsGroup(QGroupBox):
         super().__init__("Formaty wyjściowe", parent)
         self.layout = QGridLayout(self)
         # consistent spacing for the formats grid as well
-        self.layout.setVerticalSpacing(6)
+        self.layout.setVerticalSpacing(4)
         self.layout.setHorizontalSpacing(8)
-        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.layout.setContentsMargins(6, 4, 6, 4)
 
         self.txt_cb_orig = QCheckBox("TXT")
         self.txt_cb_orig.setChecked(True)

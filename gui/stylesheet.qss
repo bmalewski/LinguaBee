@@ -1,7 +1,7 @@
 QWidget {
     background-color: #ECEFF1;
     color: #37474F;
-    font-family: 'Calibri';
+    font-family: 'Segoe UI';
     font-size: 15px;
 }
 QGroupBox {
@@ -9,7 +9,7 @@ QGroupBox {
     border: 1px solid #CFD8DC;
     border-radius: 8px;
     margin-top: 1em;
-    font-family: 'Calibri';
+    font-family: 'Segoe UI';
     font-weight: bold;
     padding: 15px;
 }
@@ -18,16 +18,16 @@ QGroupBox::title {
     subcontrol-position: top left;
     padding: 0 10px;
     margin-left: 10px;
-    font-family: 'Calibri';
+    font-family: 'Segoe UI';
     font-weight: bold;
     color: #0288D1;
 }
 QLabel {
     background-color: transparent;
-    font-family: 'Calibri';
-    font-size: 16px;
-    font-weight: 400;
-    color: #546E7A;
+    font-family: 'Segoe UI';
+    font-size: 15px;
+    font-weight: 600;
+    color: #7A8D98;
     line-height: 1.25;
 }
 QLineEdit {
@@ -39,13 +39,13 @@ QLineEdit {
     color: #263238;
 }
 QComboBox {
-    font: 600 16px 'Calibri';
+    font: 600 16px 'Segoe UI';
     background-color: #ECEFF1;
     border: none;
     border-bottom: 2px solid #78909C;
     border-radius: 4px;
     padding: 6px;
-    color: #4F5B62;
+    color: #66737C;
 }
 QComboBox:hover {
     background-color: #E3F2FD;
@@ -56,8 +56,8 @@ QComboBox:on {
     border-bottom: 2px solid #0288D1;
 }
 QComboBox QAbstractItemView {
-    font: 600 16px 'Calibri';
-    color: #4F5B62;
+    font: 600 16px 'Segoe UI';
+    color: #66737C;
     border: 1px solid #CFD8DC;
     border-radius: 4px;
     background-color: #FFFFFF;
@@ -96,7 +96,7 @@ QComboBox::drop-down {
     border: none;
 }
 QPushButton {
-    font: 700 16px 'Calibri';
+    font: 700 16px 'Segoe UI';
     background-color: #B0BEC5;
     color: #263238;
     border: none;
@@ -108,7 +108,9 @@ QPushButton:hover {
     background-color: #90A4AE;
 }
 QPushButton#StartButton {
-    font: 700 16px 'Calibri';
+    font: 700 16px 'Segoe UI';
+    min-height: 26px;
+    padding: 6px 14px;
     text-transform: uppercase;
     background-color: #0288D1;
     color: #FFFFFF;
@@ -117,7 +119,9 @@ QPushButton#StartButton:hover {
     background-color: #039BE5;
 }
 QPushButton#StopButton {
-    font: 700 16px 'Calibri';
+    font: 700 16px 'Segoe UI';
+    min-height: 26px;
+    padding: 6px 14px;
     background-color: #D32F2F;
     color: #FFFFFF;
 }
@@ -136,7 +140,7 @@ QLineEdit#SourceUrlEntry {
     padding-bottom: 5px;
 }
 QProgressBar {
-    font-family: 'Calibri';
+    font-family: 'Segoe UI';
     border: none;
     background-color: #B0BEC5;
     border-radius: 8px;
@@ -153,12 +157,14 @@ QProgressBar::chunk {
     border-radius: 8px;
 }
 QCheckBox {
+    font-size: 13px;
+    font-weight: 600;
     spacing: 8px;
     color: #546E7A;
 }
 QCheckBox::indicator {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
 }
 QCheckBox::indicator:unchecked {
     border: 2px solid #78909C;
