@@ -82,7 +82,8 @@ QPushButton {
     color: #263238;
     border: none;
     border-radius: 4px;
-    padding: 10px 18px;
+    padding: 8px 18px;
+    min-height: 32px;
     font-weight: bold;
     text-transform: uppercase;
 }
@@ -102,6 +103,17 @@ QPushButton#StopButton {
 }
 QPushButton#StopButton:hover {
     background-color: #E53935;
+}
+QPushButton#SourceFileButton {
+    min-height: 32px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    text-transform: none;
+}
+QLineEdit#SourceUrlEntry {
+    min-height: 30px;
+    padding-top: 5px;
+    padding-bottom: 5px;
 }
 QProgressBar {
     border: none;

@@ -9,18 +9,22 @@ class SourceGroup(QGroupBox):
         super().__init__("Źródło", parent)
         self.layout = QGridLayout(self)
         # consistent spacing/margins for all groups
-        self.layout.setVerticalSpacing(6)
+        self.layout.setVerticalSpacing(8)
         self.layout.setHorizontalSpacing(8)
         self.layout.setContentsMargins(6, 6, 6, 6)
         self.url_entry = QLineEdit()
-        self.url_entry.setPlaceholderText("https://www.youtube.com/watch?v=...")
-        self.file_btn = QPushButton("Wybierz plik(i)")
-        self.layout.addWidget(QLabel("Adres URL:"), 0, 0)
-        self.layout.addWidget(self.url_entry, 0, 1)
-        self.layout.addWidget(QLabel("Plik lokalny:"), 1, 0)
-        self.layout.addWidget(self.file_btn, 1, 1)
-        self.file_label = QLabel("Nie wybrano pliku.")
-        self.layout.addWidget(self.file_label, 2, 0, 1, 2)
+        self.url_entry.setObjectName("SourceUrlEntry")
+        self.url_entry.setMinimumHeight(30)
+        self.url_entry.setPlaceholderText("WSTAW LINK DO YOUTUBE")
+        self.file_btn = QPushButton("WYBIERZ PLIK LOKALNY")
+        self.file_btn.setObjectName("SourceFileButton")
+        self.file_btn.setMinimumHeight(32)
+        self.file_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.layout.addWidget(self.url_entry, 0, 0)
+        self.layout.addWidget(self.file_btn, 2, 0)
+        self.layout.setRowStretch(1, 1)
+        self.layout.setColumnMinimumWidth(0, 96)
+        self.layout.setColumnStretch(0, 1)
 
 class TranscriptionGroup(QGroupBox):
     def __init__(self, parent=None):
@@ -63,8 +67,9 @@ class TranscriptionGroup(QGroupBox):
             "Grecki": "el",
             "Hebrajski": "he"
         }
+        language_names = sorted(self.languages.keys(), key=str.casefold)
         self.src_lang_combo = QComboBox()
-        self.src_lang_combo.addItems(["auto"] + list(self.languages.keys()))
+        self.src_lang_combo.addItems(["auto"] + language_names)
         self.layout.addWidget(QLabel("Język\nźródłowy:"), 1, 0)
         self.layout.addWidget(self.src_lang_combo, 1, 1)
 
@@ -120,14 +125,15 @@ class TranslationGroup(QGroupBox):
             "Grecki": "el",
             "Hebrajski": "he"
         }
+        language_names = sorted(self.languages.keys(), key=str.casefold)
 
         self.translation_src_lang_combo = QComboBox()
-        self.translation_src_lang_combo.addItems(["auto"] + list(self.languages.keys()))
+        self.translation_src_lang_combo.addItems(["auto"] + language_names)
         self.translation_src_lang_combo.setCurrentText("auto")
         self.translation_src_lang_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.tgt_lang_combo = QComboBox()
-        self.tgt_lang_combo.addItems(list(self.languages.keys()))
+        self.tgt_lang_combo.addItems(language_names)
         self.tgt_lang_combo.setCurrentText("Polski")
         self.tgt_lang_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -182,9 +188,10 @@ class SummaryGroup(QGroupBox):
             "Grecki": "el",
             "Hebrajski": "he"
         }
+        language_names = sorted(self.languages.keys(), key=str.casefold)
 
         self.summary_lang_combo = QComboBox()
-        self.summary_lang_combo.addItems(list(self.languages.keys()))
+        self.summary_lang_combo.addItems(language_names)
         self.summary_lang_combo.setCurrentText("Polski")
         self.summary_lang_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 

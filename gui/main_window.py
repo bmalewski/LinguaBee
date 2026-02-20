@@ -223,12 +223,9 @@ class MainWindow(QMainWindow):
         logo_label.setFixedSize(rounded.size())
         logo_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        top_layout = QHBoxLayout()
-        top_layout.addWidget(self.source_group, 2)
-        top_layout.addWidget(logo_label, 0, Qt.AlignRight)
-
         main_grid = QGridLayout()
-        main_grid.addLayout(top_layout, 0, 0, 1, 3)
+        main_grid.addWidget(self.source_group, 0, 0, 1, 2)
+        main_grid.addWidget(logo_label, 0, 2, Qt.AlignCenter)
         main_grid.addWidget(self.transcription_group, 1, 0)
         main_grid.addWidget(self.translation_group, 1, 1)
         main_grid.addWidget(self.summary_group, 1, 2)
@@ -282,7 +279,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def clear_local_files(self):
         self.local_files = []
-        self.source_group.file_label.setText("Nie wybrano pliku.")
+        self.source_group.file_btn.setText("WYBIERZ PLIK LOKALNY")
         self.transcription_group.model_combo.setEnabled(True)
 
     @Slot()
@@ -351,7 +348,9 @@ class MainWindow(QMainWindow):
         paths, _ = QFileDialog.getOpenFileNames(self, "Wybierz pliki", "", file_filter)
         if paths:
             self.local_files = paths
-            self.source_group.file_label.setText(f"Wybrano {len(paths)} plików." if len(paths) > 1 else os.path.basename(paths[0]))
+            self.source_group.file_btn.setText(
+                f"WYBRANO {len(paths)} PLIKÓW" if len(paths) > 1 else os.path.basename(paths[0])
+            )
             text_like_exts = {'.txt', '.docx', '.html', '.htm', '.srt'}
             has_text_file = any(os.path.splitext(p)[1].lower() in text_like_exts for p in paths)
             if has_text_file:
