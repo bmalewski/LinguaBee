@@ -141,7 +141,7 @@ def translate(config, original_text, original_segments, whisper_info, status_sig
         return translate_ollama(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
     elif config.translation_model == "Helsinki (lokalny)":
         return translate_helsinki(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
-    elif config.translation_model == "OpenRouter (API)":
+    elif config.translation_model == "OpenRouter":
         return translate_openrouter(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
     return None, None
 

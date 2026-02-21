@@ -75,7 +75,7 @@ class TranscriptionGroup(QGroupBox):
 
         # Correction / post-editing option (Korekta)
         self.correction_combo = QComboBox()
-        self.correction_combo.addItems(["Brak", "Ollama (lokalny)", "Gemini (API)", "OpenRouter (API)"])
+        self.correction_combo.addItems(["Brak", "Ollama (lokalny)", "Gemini", "OpenRouter"])
         self.correction_combo.setCurrentText("Brak")
         self.layout.addWidget(QLabel("Korekta:"), 2, 0)
         self.layout.addWidget(self.correction_combo, 2, 1)
@@ -96,7 +96,7 @@ class TranslationGroup(QGroupBox):
         self.layout.setContentsMargins(6, 4, 6, 4)
         self.translation_combo = QComboBox()
         # Removed OpenAI and Gemini options per user request
-        self.translation_combo.addItems(["Brak", "NLLB (lokalny)", "Helsinki (lokalny)", "Ollama (lokalny)", "OpenRouter (API)"])
+        self.translation_combo.addItems(["Brak", "NLLB (lokalny)", "Helsinki (lokalny)", "Ollama (lokalny)", "OpenRouter"])
         self.translation_combo.setCurrentText("NLLB (lokalny)")
         self.languages = {
             "Angielski": "en",
@@ -158,7 +158,7 @@ class SummaryGroup(QGroupBox):
         # keep symmetric top/bottom margins so the group padding is balanced
         self.layout.setContentsMargins(6, 4, 6, 4)
         self.summary_combo = QComboBox()
-        self.summary_combo.addItems(["Brak", "Ollama (lokalny)", "Gemini (API)", "OpenRouter (API)", "BART (lokalny)"])
+        self.summary_combo.addItems(["Brak", "Ollama (lokalny)", "Gemini", "OpenRouter", "BART (lokalny)"])
         self.summary_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.languages = {

@@ -5,7 +5,7 @@ import re
 # UI / Qt imports
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QPushButton, QProgressBar, QTextEdit, QMessageBox, QFileDialog,
-    QVBoxLayout, QHBoxLayout, QGridLayout, QLabel
+    QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QGroupBox, QButtonGroup, QApplication, QSizePolicy
 )
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QTextCursor
@@ -95,6 +95,15 @@ class MainWindow(QMainWindow):
         self._init_layout()
         self._connect_signals()
 
+        try:
+            left_width = int(getattr(self, 'left_sections_fixed_width', 900))
+            preview_width = int(getattr(self, 'preview_target_width', 420))
+            min_window_width = max(1400, left_width + preview_width + 100)
+            self.setMinimumWidth(min_window_width)
+            self.resize(max(min_window_width + 120, 1650), 980)
+        except Exception:
+            pass
+
         # Load persisted settings from previous sessions (if any) and apply
         try:
             settings = load_settings()
@@ -160,7 +169,27 @@ class MainWindow(QMainWindow):
         self.transcription_group = TranscriptionGroup()
         self.translation_group = TranslationGroup()
         self.summary_group = SummaryGroup()
+        self.pipeline_grid_spacing = 8
+        try:
+            pipeline_groups = [self.transcription_group, self.translation_group, self.summary_group]
+            base_width = max(g.sizeHint().width() for g in pipeline_groups)
+            target_width = max(260, int(base_width * 0.82))
+            self.pipeline_group_target_width = target_width
+            for group in pipeline_groups:
+                group.setFixedWidth(target_width)
+                group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        except Exception:
+            self.pipeline_group_target_width = 260
+            pass
         self.formats_group = FormatsGroup()
+        try:
+            self.left_sections_fixed_width = int((self.pipeline_group_target_width * 3) + (self.pipeline_grid_spacing * 2))
+            self.source_group.setFixedWidth(int((self.pipeline_group_target_width * 2) + self.pipeline_grid_spacing))
+            self.source_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            self.formats_group.setFixedWidth(self.left_sections_fixed_width)
+            self.formats_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        except Exception:
+            self.left_sections_fixed_width = int((self.pipeline_group_target_width * 3) + 16)
         
         self.progress_bar = QProgressBar()
         self.log_box = QTextEdit()
@@ -172,6 +201,38 @@ class MainWindow(QMainWindow):
         self.stop_btn = QPushButton("PRZERWIJ")
         self.stop_btn.setObjectName("StopButton")
         self.stop_btn.setEnabled(False)
+
+        self.preview_group = QGroupBox("Wynik pracy")
+        self.preview_tab_transcription_btn = QPushButton("Transkrypcja")
+        self.preview_tab_translation_btn = QPushButton("Tłumaczenie")
+        self.preview_tab_summary_btn = QPushButton("Streszczenie")
+        self.preview_copy_btn = QPushButton("Kopiuj")
+        self.preview_copy_btn.setObjectName("PreviewCopyButton")
+        self.preview_tab_buttons = [
+            self.preview_tab_transcription_btn,
+            self.preview_tab_translation_btn,
+            self.preview_tab_summary_btn,
+        ]
+        self.preview_tab_button_group = QButtonGroup(self)
+        self.preview_tab_button_group.setExclusive(True)
+        for button in self.preview_tab_buttons:
+            button.setCheckable(True)
+            button.setObjectName("PreviewTabButton")
+            self.preview_tab_button_group.addButton(button)
+
+        self.preview_output = QTextEdit()
+        self.preview_output.setObjectName("ResultOutput")
+        self.preview_output.setReadOnly(True)
+        self.preview_output.setPlaceholderText("Tutaj pojawi się wynik transkrypcji, tłumaczenia lub streszczenia.")
+
+        self.preview_outputs = {
+            "transcription": "",
+            "translation": "",
+            "summary": "",
+        }
+        self.preview_current_section = "transcription"
+        self.preview_tab_transcription_btn.setChecked(True)
+        self.preview_output.setPlainText("Brak wyników transkrypcji.")
         from PySide6.QtWidgets import QLabel
 
 
@@ -223,17 +284,65 @@ class MainWindow(QMainWindow):
         logo_label.setFixedSize(rounded.size())
         logo_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
+        preview_layout = QVBoxLayout(self.preview_group)
+        preview_layout.setContentsMargins(8, 8, 8, 8)
+        preview_layout.setSpacing(8)
+        preview_tabs_layout = QHBoxLayout()
+        preview_tabs_layout.setContentsMargins(0, 0, 0, 0)
+        preview_tabs_layout.setSpacing(6)
+        preview_tabs_layout.addWidget(self.preview_tab_transcription_btn)
+        preview_tabs_layout.addWidget(self.preview_tab_translation_btn)
+        preview_tabs_layout.addWidget(self.preview_tab_summary_btn)
+        preview_tabs_layout.addStretch(1)
+        preview_tabs_layout.addWidget(self.preview_copy_btn)
+        preview_layout.addLayout(preview_tabs_layout)
+        preview_layout.addWidget(self.preview_output)
+        try:
+            preview_target_width = max(420, int(self.pipeline_group_target_width * 1.6))
+            self.preview_target_width = preview_target_width
+            self.preview_group.setMinimumWidth(preview_target_width)
+            self.preview_group.setMaximumWidth(16777215)
+            self.preview_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        except Exception:
+            self.preview_target_width = 420
+            pass
+
         main_grid = QGridLayout()
+        main_grid.setContentsMargins(0, 0, 0, 0)
+        main_grid.setHorizontalSpacing(self.pipeline_grid_spacing)
+        main_grid.setVerticalSpacing(8)
         main_grid.addWidget(self.source_group, 0, 0, 1, 2)
         main_grid.addWidget(logo_label, 0, 2, Qt.AlignCenter)
         main_grid.addWidget(self.transcription_group, 1, 0)
         main_grid.addWidget(self.translation_group, 1, 1)
         main_grid.addWidget(self.summary_group, 1, 2)
         main_grid.addWidget(self.formats_group, 2, 0, 1, 3)
+        main_grid.setColumnMinimumWidth(0, self.pipeline_group_target_width)
+        main_grid.setColumnMinimumWidth(1, self.pipeline_group_target_width)
+        main_grid.setColumnMinimumWidth(2, self.pipeline_group_target_width)
+        main_grid.setColumnStretch(0, 0)
+        main_grid.setColumnStretch(1, 0)
+        main_grid.setColumnStretch(2, 0)
 
-        self.layout.addLayout(main_grid)
-        self.layout.addWidget(self.progress_bar)
-        self.layout.addWidget(self.log_box)
+        left_panel_layout = QVBoxLayout()
+        left_panel_layout.setContentsMargins(0, 0, 0, 0)
+        left_panel_layout.setSpacing(8)
+        left_panel_layout.addLayout(main_grid)
+        left_panel_layout.addWidget(self.progress_bar)
+        left_panel_layout.addWidget(self.log_box)
+
+        left_panel_widget = QWidget()
+        left_panel_widget.setLayout(left_panel_layout)
+        left_panel_widget.setFixedWidth(self.left_sections_fixed_width)
+        left_panel_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(10)
+        content_layout.addWidget(left_panel_widget, 0)
+        content_layout.addWidget(self.preview_group, 1)
+
+        self.layout.addLayout(content_layout)
 
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.start_btn, 3)
@@ -261,6 +370,11 @@ class MainWindow(QMainWindow):
         self.summary_group.summary_combo.currentTextChanged.connect(self._on_model_or_language_changed)
         self.summary_group.summary_lang_combo.currentTextChanged.connect(self._on_model_or_language_changed)
         self.summary_group.summary_combo.activated.connect(self.open_summary_settings)
+
+        self.preview_tab_transcription_btn.clicked.connect(lambda: self._set_preview_section("transcription"))
+        self.preview_tab_translation_btn.clicked.connect(lambda: self._set_preview_section("translation"))
+        self.preview_tab_summary_btn.clicked.connect(lambda: self._set_preview_section("summary"))
+        self.preview_copy_btn.clicked.connect(self._copy_current_preview)
         
         # Save settings whenever format checkboxes change
         for cb in getattr(self.formats_group, 'original_checkboxes', []):
@@ -274,6 +388,68 @@ class MainWindow(QMainWindow):
     def _on_model_or_language_changed(self, *_args):
         self._update_ui_state()
         self._save_current_settings()
+
+    def _set_preview_section(self, section: str):
+        section = section if section in self.preview_outputs else "transcription"
+        self.preview_current_section = section
+
+        if section == "transcription":
+            self.preview_tab_transcription_btn.setChecked(True)
+        elif section == "translation":
+            self.preview_tab_translation_btn.setChecked(True)
+        elif section == "summary":
+            self.preview_tab_summary_btn.setChecked(True)
+
+        text = self.preview_outputs.get(section, "")
+        if text.strip():
+            self.preview_output.setPlainText(text)
+        else:
+            empty_map = {
+                "transcription": "Brak wyników transkrypcji.",
+                "translation": "Brak wyników tłumaczenia.",
+                "summary": "Brak wyników streszczenia.",
+            }
+            self.preview_output.setPlainText(empty_map.get(section, "Brak wyników."))
+
+    def _append_preview_result(self, section: str, source_name: str, content: str):
+        if section not in self.preview_outputs:
+            return
+        safe_content = str(content or "").strip()
+        if not safe_content:
+            return
+        safe_source = str(source_name or "Wynik")
+        block = f"[{safe_source}]\n{safe_content}"
+        existing = self.preview_outputs.get(section, "")
+        if existing.strip():
+            self.preview_outputs[section] = f"{existing}\n\n{'=' * 80}\n\n{block}"
+        else:
+            self.preview_outputs[section] = block
+
+        if self.preview_current_section == section:
+            self.preview_output.setPlainText(self.preview_outputs[section])
+
+    @Slot(str, str, str)
+    def _on_worker_preview_result(self, section: str, source_name: str, content: str):
+        self._append_preview_result(section, source_name, content)
+
+    def _clear_preview_results(self):
+        self.preview_outputs = {
+            "transcription": "",
+            "translation": "",
+            "summary": "",
+        }
+        self._set_preview_section(self.preview_current_section)
+
+    def _copy_current_preview(self):
+        text = (self.preview_outputs.get(self.preview_current_section, "") or "").strip()
+        if not text:
+            self.append_log("Brak treści do skopiowania w aktualnej zakładce podglądu.", "warning")
+            return
+        try:
+            QApplication.clipboard().setText(text)
+            self.append_log("Skopiowano wynik z aktualnej zakładki podglądu.", "success")
+        except Exception as e:
+            self.append_log(f"Nie udało się skopiować wyniku: {e}", "warning")
 
 
     @Slot()
@@ -458,7 +634,7 @@ class MainWindow(QMainWindow):
                 self.ollama_model_name, self.ollama_translation_prompt, self.translation_segment_batch_size = dialog.get_settings()
                 self.append_log(f"Ustawiono model Ollama dla tłumaczenia: {self.ollama_model_name}", "info")
                 self._save_current_settings()
-        elif model == "OpenRouter (API)":
+        elif model == "OpenRouter":
             dialog = OpenRouterTranslationSettingsDialog(
                 self,
                 current_key=self.openrouter_key,
@@ -492,7 +668,7 @@ class MainWindow(QMainWindow):
                 self.correction_prompt = prompt
                 self.append_log(f"Ustawiono Korektę: model={model_name}", "info")
                 self._save_current_settings()
-        elif model == "Gemini (API)":
+        elif model == "Gemini":
             dlg = GeminiCorrectionSettingsDialog(
                 self,
                 current_key=self.gemini_key,
@@ -513,7 +689,7 @@ class MainWindow(QMainWindow):
                     pass
                 self.append_log("Zapisano ustawienia korekty Gemini.", "info")
                 self._save_current_settings()
-        elif model == "OpenRouter (API)":
+        elif model == "OpenRouter":
             dlg = OpenRouterCorrectionSettingsDialog(
                 self,
                 current_key=self.openrouter_key,
@@ -545,7 +721,7 @@ class MainWindow(QMainWindow):
                 self.ollama_summary_model_name, self.ollama_summary_prompt = dialog.get_settings()
                 self.append_log(f"Ustawiono model Ollama dla streszczenia: {self.ollama_summary_model_name}", "info")
                 self._save_current_settings()
-        elif model == "Gemini (API)":
+        elif model == "Gemini":
             dlg = GeminiSummarySettingsDialog(self, current_key=self.gemini_key, current_prompt=self.summary_gemini_prompt)
             if dlg.exec():
                 key, prompt = dlg.get_settings()
@@ -559,7 +735,7 @@ class MainWindow(QMainWindow):
                     pass
                 self.append_log("Zapisano ustawienia streszczenia Gemini.", "info")
                 self._save_current_settings()
-        elif model == "OpenRouter (API)":
+        elif model == "OpenRouter":
             dlg = OpenRouterSummarySettingsDialog(
                 self,
                 current_key=self.openrouter_key,
@@ -655,7 +831,12 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             try:
-                self.transcription_group.correction_combo.setCurrentText(settings.get('transcription_correction', self.transcription_group.correction_combo.currentText()))
+                correction_model = settings.get('transcription_correction', self.transcription_group.correction_combo.currentText())
+                if correction_model == "Gemini (API)":
+                    correction_model = "Gemini"
+                if correction_model == "OpenRouter (API)":
+                    correction_model = "OpenRouter"
+                self.transcription_group.correction_combo.setCurrentText(correction_model)
             except Exception:
                 pass
             try:
@@ -672,7 +853,10 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             try:
-                self.translation_group.translation_combo.setCurrentText(settings.get('translation_model', self.translation_group.translation_combo.currentText()))
+                translation_model = settings.get('translation_model', self.translation_group.translation_combo.currentText())
+                if translation_model == "OpenRouter (API)":
+                    translation_model = "OpenRouter"
+                self.translation_group.translation_combo.setCurrentText(translation_model)
             except Exception:
                 pass
             try:
@@ -687,6 +871,10 @@ class MainWindow(QMainWindow):
                 legacy_summary = settings.get('summary_model', self.summary_group.summary_combo.currentText())
                 if legacy_summary in ["MT5 (lokalny)", "PLT5 (lokalny)"]:
                     legacy_summary = "BART (lokalny)"
+                if legacy_summary == "Gemini (API)":
+                    legacy_summary = "Gemini"
+                if legacy_summary == "OpenRouter (API)":
+                    legacy_summary = "OpenRouter"
                 self.summary_group.summary_combo.setCurrentText(legacy_summary)
             except Exception:
                 pass
@@ -849,10 +1037,13 @@ class MainWindow(QMainWindow):
         self.progress_bar.setFormat(f"%p% | ETA: {self.current_eta}")
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
+        self._clear_preview_results()
+        self._set_preview_section("transcription")
 
         self.thread = TranscriptionThread(config)
         self.thread.progress_signal.connect(self._on_progress_updated)
         self.thread.status_signal.connect(self.append_log)
+        self.thread.preview_signal.connect(self._on_worker_preview_result)
         self.thread.finished_signal.connect(self.on_finished)
         self.thread.start()
 

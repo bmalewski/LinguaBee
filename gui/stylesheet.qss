@@ -134,6 +134,30 @@ QPushButton#SourceFileButton {
     padding-bottom: 5px;
     text-transform: none;
 }
+QPushButton#PreviewTabButton {
+    font: 600 14px 'Segoe UI';
+    min-height: 28px;
+    padding: 4px 10px;
+    background-color: #CFD8DC;
+    color: #37474F;
+}
+QPushButton#PreviewTabButton:hover {
+    background-color: #B0BEC5;
+}
+QPushButton#PreviewTabButton:checked {
+    background-color: #0288D1;
+    color: #FFFFFF;
+}
+QPushButton#PreviewCopyButton {
+    font: 600 14px 'Segoe UI';
+    min-height: 28px;
+    padding: 4px 12px;
+    background-color: #78909C;
+    color: #FFFFFF;
+}
+QPushButton#PreviewCopyButton:hover {
+    background-color: #607D8B;
+}
 QLineEdit#SourceUrlEntry {
     min-height: 30px;
     padding-top: 5px;
@@ -181,6 +205,12 @@ QPlainTextEdit, QTextEdit {
     color: #D9D9D9;
     font-size: 14px;
     font-weight: 400;
+}
+QTextEdit#ResultOutput {
+    background-color: #424242;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 600;
 }
 QPlainTextEdit QScrollBar:vertical,
 QTextEdit QScrollBar:vertical {

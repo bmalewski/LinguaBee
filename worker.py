@@ -483,6 +483,7 @@ helsinki_translator_cache = {}
 class TranscriptionThread(QThread):
     progress_signal = Signal(int)
     status_signal = Signal(str, str)
+    preview_signal = Signal(str, str, str)
     finished_signal = Signal(str, str)
 
     def __init__(self, config: TranscriptionConfig):
@@ -496,6 +497,61 @@ class TranscriptionThread(QThread):
 
     def stop(self):
         self._is_stopped = True
+
+    def _emit_preview(self, section: str, source_name: str, content: str):
+        try:
+            if not isinstance(content, str):
+                content = str(content or "")
+            payload = content.strip()
+            if not payload:
+                return
+            max_chars = 250000
+            if len(payload) > max_chars:
+                payload = payload[:max_chars] + "\n\n[... obcięto podgląd ...]"
+            self.preview_signal.emit(section, str(source_name or "Wynik"), payload)
+        except Exception:
+            pass
+
+    def _format_srt_timestamp(self, seconds) -> str:
+        try:
+            val = float(seconds or 0.0)
+        except Exception:
+            val = 0.0
+        if val < 0:
+            val = 0.0
+        total_ms = int(round(val * 1000.0))
+        hours = total_ms // 3600000
+        minutes = (total_ms % 3600000) // 60000
+        secs = (total_ms % 60000) // 1000
+        millis = total_ms % 1000
+        return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
+
+    def _segments_to_srt_text(self, segments) -> str:
+        if not segments:
+            return ""
+        blocks = []
+        for idx, seg in enumerate(segments, start=1):
+            try:
+                start_ts = self._format_srt_timestamp(seg.get("start", 0.0))
+                end_ts = self._format_srt_timestamp(seg.get("end", seg.get("start", 0.0)))
+                txt = str(seg.get("text", "")).strip()
+            except Exception:
+                start_ts = "00:00:00,000"
+                end_ts = "00:00:00,000"
+                txt = ""
+            if not txt:
+                continue
+            blocks.append(f"{idx}\n{start_ts} --> {end_ts}\n{txt}")
+        return "\n\n".join(blocks).strip()
+
+    def _build_srt_preview(self, segments, fallback_text: str = "") -> str:
+        srt_text = self._segments_to_srt_text(segments)
+        if srt_text:
+            return srt_text
+        fallback = str(fallback_text or "").strip()
+        if not fallback:
+            return ""
+        return f"1\n00:00:00,000 --> 00:00:00,000\n{fallback}"
 
     def run(self):
         if self._is_stopped:
@@ -944,7 +1000,7 @@ class TranscriptionThread(QThread):
                                 try:
                                     target_text = formatted_text if formatted_text is not None else text
                                     if target_text and target_text.strip():
-                                        self.status_signal.emit("Uruchamiam post‑editing przez Gemini (API)...", "info")
+                                        self.status_signal.emit("Uruchamiam post‑editing przez Gemini...", "info")
                                         augmented_prompt = corr_prompt
                                         if segments:
                                             augmented_prompt = (
@@ -1011,7 +1067,7 @@ class TranscriptionThread(QThread):
                                                         self.status_signal.emit(f"Nie udało się zapisać skorygowanego TXT: {e}", "warning")
                                             except Exception:
                                                 pass
-                                            self.status_signal.emit("Zastosowano post‑editing przez Gemini (API).", "info")
+                                            self.status_signal.emit("Zastosowano post‑editing przez Gemini.", "info")
                                 except Exception as e:
                                     self.status_signal.emit(f"Błąd podczas post‑editingu przez Gemini: {e}", "warning")
                         except Exception:
@@ -1293,6 +1349,20 @@ class TranscriptionThread(QThread):
                         if self._is_stopped: break
                         translated_text, translated_segments = translate(self.config, text, segments, info, self.status_signal, self.progress_signal, self.finished_signal, lambda: self._is_stopped)
 
+                    try:
+                        transcription_preview_srt = self._build_srt_preview(segments, text)
+                        if transcription_preview_srt:
+                            self._emit_preview("transcription", base_name, transcription_preview_srt)
+                    except Exception:
+                        pass
+
+                    try:
+                        translation_preview_srt = self._build_srt_preview(translated_segments, translated_text)
+                        if translation_preview_srt:
+                            self._emit_preview("translation", base_name, translation_preview_srt)
+                    except Exception:
+                        pass
+
                     if self._is_stopped: break
 
                     if self.config.formats_translated and (translated_text is not None or translated_segments is not None):
@@ -1317,7 +1387,7 @@ class TranscriptionThread(QThread):
                         summary_text = None
                         try:
                             corr_mode_now = str(getattr(self.config, 'transcription_correction', 'Brak') or '').lower()
-                            if self.config.summary_model == "Gemini (API)":
+                            if self.config.summary_model == "Gemini":
                                 now_ts = time.time()
                                 if now_ts < gemini_rate_limited_until:
                                     wait_left = int(max(1, gemini_rate_limited_until - now_ts))
@@ -1341,6 +1411,10 @@ class TranscriptionThread(QThread):
                         except Exception:
                             summary_text = summarize(self.config, text, info, self.status_signal, self.progress_signal, self.finished_signal, lambda: self._is_stopped)
                         if summary_text:
+                            try:
+                                self._emit_preview("summary", base_name, summary_text)
+                            except Exception:
+                                pass
                             self.status_signal.emit("Zapisywanie plików streszczenia...", "info")
                             for fmt in self.config.formats_summary:
                                 ext = fmt.lower()

@@ -1244,7 +1244,7 @@ class GeminiSettingsDialog(QDialog):
     """Simple dialog to enter/store Gemini API key (no model choice)."""
     def __init__(self, parent=None, current_key=""):
         super().__init__(parent)
-        self.setWindowTitle("Ustawienia Gemini (API)")
+        self.setWindowTitle("Ustawienia Gemini")
         self.layout = QGridLayout(self)
         self.layout.addWidget(QLabel("Klucz API Gemini:"), 0, 0)
         self.key_input = QLineEdit(current_key)

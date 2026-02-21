@@ -45,10 +45,10 @@ def summarize(config, text_to_summarize, whisper_info, status_signal, progress_s
     if config.summary_model == "Ollama (lokalny)":
         return summarize_ollama(config, text_to_summarize, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
 
-    if config.summary_model == "Gemini (API)":
+    if config.summary_model == "Gemini":
         return summarize_gemini(config, text_to_summarize, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
 
-    if config.summary_model == "OpenRouter (API)":
+    if config.summary_model == "OpenRouter":
         return summarize_openrouter(config, text_to_summarize, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
 
     if config.summary_model == "BART (lokalny)":
