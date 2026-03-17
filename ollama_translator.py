@@ -1,6 +1,7 @@
 import httpx
 import json
 import re
+from model_response_parser import parse_dict_response
 
 class OllamaTranslator:
     @staticmethod
@@ -140,26 +141,12 @@ Oto dane wejściowe:
             if self.status_callback:
                 self.status_callback(f"Otrzymano odpowiedź JSON z Ollama: {full_response_str[:200]}...", "info")
 
-            json_str = full_response_str
-            
-            # Try to find a markdown JSON block first
-            match = re.search(r"```json\s*([\s\S]*?)\s*```", full_response_str)
-            if match:
-                json_str = match.group(1)
-            else:
-                # If no markdown block, try to find the first '{' and last '}'
-                # This is a more robust way to extract JSON from conversational text
-                start_idx = full_response_str.find('{')
-                end_idx = full_response_str.rfind('}')
-                if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
-                    json_str = full_response_str[start_idx : end_idx + 1]
-                else:
-                    # If still no valid JSON structure found, log a warning and try to parse the whole thing
-                    if self.status_callback:
-                        self.status_callback(f"Ostrzeżenie: Nie znaleziono wyraźnego bloku JSON w odpowiedzi. Próba parsowania całej odpowiedzi.", "warning")
-                    json_str = full_response_str # Fallback to parsing the whole string
-
-            return json.loads(json_str)
+            parsed = parse_dict_response(full_response_str)
+            if isinstance(parsed, dict):
+                return parsed
+            if self.status_callback:
+                self.status_callback("Ostrzeżenie: Nie znaleziono poprawnego JSON obiektu w odpowiedzi batch. Zwracam pustą listę tłumaczeń.", "warning")
+            return {"translated_texts": []}
 
         except httpx.ConnectError:
             if self.status_callback:

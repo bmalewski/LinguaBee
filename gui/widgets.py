@@ -217,14 +217,12 @@ class FormatsGroup(QGroupBox):
         self.txt_cb_orig.setChecked(True)
         self.docx_cb_orig = QCheckBox("DOCX")
         self.docx_cb_orig.setChecked(True)
-        self.html_cb_orig = QCheckBox("HTML")
         self.srt_cb_orig = QCheckBox("SRT")
         self.srt_cb_orig.setChecked(True)
 
         self.txt_cb_trans = QCheckBox("TXT")
         self.docx_cb_trans = QCheckBox("DOCX")
         self.docx_cb_trans.setChecked(True)
-        self.html_cb_trans = QCheckBox("HTML")
         self.srt_cb_trans = QCheckBox("SRT")
         self.srt_cb_trans.setChecked(True)
 
@@ -232,11 +230,10 @@ class FormatsGroup(QGroupBox):
         self.txt_cb_summ.setChecked(True)
         self.docx_cb_summ = QCheckBox("DOCX")
         self.docx_cb_summ.setChecked(True)
-        self.html_cb_summ = QCheckBox("HTML")
 
-        self.original_checkboxes = [self.txt_cb_orig, self.docx_cb_orig, self.html_cb_orig, self.srt_cb_orig]
-        self.translated_checkboxes = [self.txt_cb_trans, self.docx_cb_trans, self.html_cb_trans, self.srt_cb_trans]
-        self.summary_checkboxes = [self.txt_cb_summ, self.docx_cb_summ, self.html_cb_summ]
+        self.original_checkboxes = [self.txt_cb_orig, self.docx_cb_orig, self.srt_cb_orig]
+        self.translated_checkboxes = [self.txt_cb_trans, self.docx_cb_trans, self.srt_cb_trans]
+        self.summary_checkboxes = [self.txt_cb_summ, self.docx_cb_summ]
 
         self.layout.addWidget(QLabel("Transkrypcja"), 0, 0)
         self.layout.addWidget(QLabel("Tłumaczenie"), 0, 1)
@@ -247,11 +244,33 @@ class FormatsGroup(QGroupBox):
         self.layout.addWidget(self.docx_cb_orig, 2, 0)
         self.layout.addWidget(self.docx_cb_trans, 2, 1)
         self.layout.addWidget(self.docx_cb_summ, 2, 2)
-        self.layout.addWidget(self.html_cb_orig, 3, 0)
-        self.layout.addWidget(self.html_cb_trans, 3, 1)
-        self.layout.addWidget(self.html_cb_summ, 3, 2)
-        self.layout.addWidget(self.srt_cb_orig, 4, 0)
-        self.layout.addWidget(self.srt_cb_trans, 4, 1)
+        self.layout.addWidget(self.srt_cb_orig, 3, 0)
+        self.layout.addWidget(self.srt_cb_trans, 3, 1)
         self.layout.setColumnStretch(0, 1)
         self.layout.setColumnStretch(1, 1)
         self.layout.setColumnStretch(2, 1)
+
+
+class PipelinePresetGroup(QGroupBox):
+    def __init__(self, parent=None):
+        super().__init__("Presety pipeline", parent)
+        self.layout = QGridLayout(self)
+        self.layout.setVerticalSpacing(6)
+        self.layout.setHorizontalSpacing(8)
+        self.layout.setContentsMargins(6, 6, 6, 6)
+
+        self.preset_combo = QComboBox()
+        self.preset_combo.addItems([
+            "Szybki start",
+            "Transkrypcja + tłumaczenie",
+            "Pełny pipeline",
+            "Tekst -> tłumaczenie/streszczenie",
+        ])
+
+        self.apply_btn = QPushButton("Zastosuj")
+        self.apply_btn.setMinimumHeight(30)
+
+        self.layout.addWidget(QLabel("Profil:"), 0, 0)
+        self.layout.addWidget(self.preset_combo, 0, 1)
+        self.layout.addWidget(self.apply_btn, 1, 0, 1, 2)
+        self.layout.setColumnStretch(1, 1)

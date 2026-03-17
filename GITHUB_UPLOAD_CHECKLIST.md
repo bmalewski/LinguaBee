@@ -11,7 +11,7 @@
 - kluczy API (`gemini_api_key.txt`, `openai_api_key.txt`, inne sekrety)
 - lokalnych danych użytkownika (`user_settings.json`)
 - pobranych modeli (`models/`)
-- wyników działania programu (`downloads/`, logi)
+- wyników działania programu (`output/`, logi)
 - katalogów środowiska (`venv/`, `.venv/`)
 - cache (`__pycache__/`, `*.pyc`)
 

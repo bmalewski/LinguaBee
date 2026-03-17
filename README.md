@@ -5,7 +5,7 @@ Desktopowa aplikacja do:
 - tłumaczeń (lokalne i API),
 - streszczania (lokalne i API),
 - korekty tekstu/SRT,
-- eksportu do TXT, DOCX, HTML, SRT.
+- eksportu do TXT, DOCX, SRT.
 
 Poniżej znajdziesz **kompletną instrukcję instalacji na Windows i macOS**.
 

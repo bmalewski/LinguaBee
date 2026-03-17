@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QComboBox, QChec
 # ApiKeyDialog removed: OpenAI/Gemini API key dialogs are no longer used in the GUI per user request.
 
 class WhisperSettingsDialog(QDialog):
-    def __init__(self, parent, available_devices, current_variant, current_device, current_device_index, current_delete_audio, current_enable_paragraphing, current_enable_denoising, current_enable_normalization, current_force_mono, current_enable_diarization, current_num_speakers, current_transcription_segment_batch_size=250):
+    def __init__(self, parent, available_devices, current_variant, current_device, current_device_index, current_delete_audio, current_enable_paragraphing, current_enable_denoising, current_enable_normalization, current_force_mono, current_enable_diarization, current_num_speakers, current_transcription_segment_batch_size=200):
         super().__init__(parent) # Poprawka: przekazanie argumentów do konstruktora
         self.setWindowTitle("Ustawienia Whisper")
         self.available_devices = available_devices
@@ -91,7 +91,7 @@ class WhisperSettingsDialog(QDialog):
 
         self.transcription_segment_batch_spin = QSpinBox()
         self.transcription_segment_batch_spin.setRange(1, 1000)
-        self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 250))
+        self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 200))
         post_proc_layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"))
         post_proc_layout.addWidget(self.transcription_segment_batch_spin)
         
@@ -658,7 +658,7 @@ class OllamaTranslationSettingsDialog(CorrectionSettingsDialog):
 
 class GeminiCorrectionSettingsDialog(QDialog):
     """Ustawienia korekty dla Gemini: tylko klucz API + prompt (bez modeli Ollama)."""
-    def __init__(self, parent=None, current_key="", current_prompt="", current_transcription_segment_batch_size=250):
+    def __init__(self, parent=None, current_key="", current_prompt="", current_transcription_segment_batch_size=200):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Korekty (Gemini API)")
         self.layout = QGridLayout(self)
@@ -679,7 +679,7 @@ class GeminiCorrectionSettingsDialog(QDialog):
         self.layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"), 3, 0)
         self.transcription_segment_batch_spin = QSpinBox()
         self.transcription_segment_batch_spin.setRange(1, 1000)
-        self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 250))
+        self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 200))
         self.layout.addWidget(self.transcription_segment_batch_spin, 3, 1, 1, 3)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -693,7 +693,7 @@ class GeminiCorrectionSettingsDialog(QDialog):
 
 class OpenRouterCorrectionSettingsDialog(QDialog):
     """Ustawienia korekty dla OpenRouter: klucz API + prompt."""
-    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-2.5-flash", current_transcription_segment_batch_size=250):
+    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-2.5-flash", current_transcription_segment_batch_size=200):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Korekty (OpenRouter API)")
         self.layout = QGridLayout(self)
@@ -724,7 +724,7 @@ class OpenRouterCorrectionSettingsDialog(QDialog):
         self.layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"), 2, 0)
         self.transcription_segment_batch_spin = QSpinBox()
         self.transcription_segment_batch_spin.setRange(1, 1000)
-        self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 250))
+        self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 200))
         self.layout.addWidget(self.transcription_segment_batch_spin, 2, 1, 1, 3)
 
         self.layout.addWidget(QLabel("Prompt (korekta):"), 3, 0)

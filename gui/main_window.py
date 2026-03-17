@@ -15,7 +15,7 @@ from config import TranscriptionConfig, downloads_dir, icons_dir, save_settings,
 from worker import TranscriptionThread
 from huggingface_utils import get_hf_token, save_hf_token
 from gui.widgets import (
-    SourceGroup, TranscriptionGroup, TranslationGroup, SummaryGroup, FormatsGroup
+    SourceGroup, TranscriptionGroup, TranslationGroup, SummaryGroup, FormatsGroup, PipelinePresetGroup
 )
 from gui.dialogs import (
     WhisperSettingsDialog, NllbSettingsDialog, OllamaSettingsDialog, BartSummarizationSettingsDialog, DiarizationDialog,
@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
         self.whisper_enable_denoising = False
         self.whisper_enable_normalization = False
         self.whisper_force_mono = True
-        self.transcription_segment_batch_size = 250
+        self.transcription_segment_batch_size = 200
         self.nllb_variant = None
         self.nllb_device = "cpu"
         self.nllb_device_index = 0
@@ -182,12 +182,15 @@ class MainWindow(QMainWindow):
             self.pipeline_group_target_width = 260
             pass
         self.formats_group = FormatsGroup()
+        self.preset_group = PipelinePresetGroup()
         try:
             self.left_sections_fixed_width = int((self.pipeline_group_target_width * 3) + (self.pipeline_grid_spacing * 2))
-            self.source_group.setFixedWidth(int((self.pipeline_group_target_width * 2) + self.pipeline_grid_spacing))
+            self.source_group.setFixedWidth(self.pipeline_group_target_width)
             self.source_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             self.formats_group.setFixedWidth(self.left_sections_fixed_width)
             self.formats_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+            self.preset_group.setFixedWidth(self.pipeline_group_target_width)
+            self.preset_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         except Exception:
             self.left_sections_fixed_width = int((self.pipeline_group_target_width * 3) + 16)
         
@@ -307,12 +310,21 @@ class MainWindow(QMainWindow):
             self.preview_target_width = 420
             pass
 
+        top_right = QWidget()
+        top_right_layout = QVBoxLayout(top_right)
+        top_right_layout.setContentsMargins(0, 0, 0, 0)
+        top_right_layout.setSpacing(8)
+        top_right_layout.addWidget(logo_label, 0, Qt.AlignCenter)
+        top_right_layout.addWidget(self.preset_group)
+        top_right_layout.addStretch(1)
+
         main_grid = QGridLayout()
         main_grid.setContentsMargins(0, 0, 0, 0)
         main_grid.setHorizontalSpacing(self.pipeline_grid_spacing)
         main_grid.setVerticalSpacing(8)
-        main_grid.addWidget(self.source_group, 0, 0, 1, 2)
-        main_grid.addWidget(logo_label, 0, 2, Qt.AlignCenter)
+        main_grid.addWidget(self.source_group, 0, 0)
+        main_grid.addWidget(self.preset_group, 0, 1)
+        main_grid.addWidget(top_right, 0, 2)
         main_grid.addWidget(self.transcription_group, 1, 0)
         main_grid.addWidget(self.translation_group, 1, 1)
         main_grid.addWidget(self.summary_group, 1, 2)
@@ -370,6 +382,9 @@ class MainWindow(QMainWindow):
         self.summary_group.summary_combo.currentTextChanged.connect(self._on_model_or_language_changed)
         self.summary_group.summary_lang_combo.currentTextChanged.connect(self._on_model_or_language_changed)
         self.summary_group.summary_combo.activated.connect(self.open_summary_settings)
+
+        self.preset_group.apply_btn.clicked.connect(self.apply_selected_preset)
+        self.preset_group.preset_combo.currentTextChanged.connect(self._save_current_settings)
 
         self.preview_tab_transcription_btn.clicked.connect(lambda: self._set_preview_section("transcription"))
         self.preview_tab_translation_btn.clicked.connect(lambda: self._set_preview_section("translation"))
@@ -514,8 +529,8 @@ class MainWindow(QMainWindow):
 
     def choose_file(self):
         file_filter = (
-            "Wszystkie wspierane (*.wav *.mp3 *.m4a *.flac *.ogg *.aac *.mp4 *.mkv *.mov *.avi *.webm *.srt *.txt *.docx *.html *.htm);;"
-            "Pliki tekstowe (*.txt *.docx *.html *.htm *.srt);;"
+            "Wszystkie wspierane (*.wav *.mp3 *.m4a *.flac *.ogg *.aac *.mp4 *.mkv *.mov *.avi *.webm *.srt *.txt *.docx);;"
+            "Pliki tekstowe (*.txt *.docx *.srt);;"
             "Pliki audio/wideo (*.wav *.mp3 *.m4a *.flac *.ogg *.aac *.mp4 *.mkv *.mov *.avi *.webm);;"
             "Wszystkie pliki (*)"
         )
@@ -525,7 +540,7 @@ class MainWindow(QMainWindow):
             self.source_group.file_btn.setText(
                 f"WYBRANO {len(paths)} PLIKÓW" if len(paths) > 1 else os.path.basename(paths[0])
             )
-            text_like_exts = {'.txt', '.docx', '.html', '.htm', '.srt'}
+            text_like_exts = {'.txt', '.docx', '.srt'}
             has_text_file = any(os.path.splitext(p)[1].lower() in text_like_exts for p in paths)
             if has_text_file:
                 self.transcription_group.model_combo.setCurrentText("Brak")
@@ -889,6 +904,13 @@ class MainWindow(QMainWindow):
                 cb.setChecked(settings.get('formats_translated', []).count(cb.text()) > 0)
             for cb in getattr(self.formats_group, 'summary_checkboxes', []):
                 cb.setChecked(settings.get('formats_summary', []).count(cb.text()) > 0)
+            try:
+                preset_name = settings.get('pipeline_preset', self.preset_group.preset_combo.currentText())
+                idx = self.preset_group.preset_combo.findText(preset_name)
+                if idx >= 0:
+                    self.preset_group.preset_combo.setCurrentIndex(idx)
+            except Exception:
+                pass
         except Exception:
             pass
         self._update_ui_state()
@@ -939,6 +961,7 @@ class MainWindow(QMainWindow):
                 'formats_original': [cb.text() for cb in getattr(self.formats_group, 'original_checkboxes', []) if cb.isChecked()],
                 'formats_translated': [cb.text() for cb in getattr(self.formats_group, 'translated_checkboxes', []) if cb.isChecked()],
                 'formats_summary': [cb.text() for cb in getattr(self.formats_group, 'summary_checkboxes', []) if cb.isChecked()],
+                'pipeline_preset': self.preset_group.preset_combo.currentText(),
                 
                 'transcription_correction': self.transcription_group.correction_combo.currentText(),
                 'correction_ollama_model_name': self.correction_ollama_model_name,
@@ -952,6 +975,80 @@ class MainWindow(QMainWindow):
             }
         except Exception:
             return {}
+
+    def _set_checkbox_group(self, checkboxes, values):
+        wanted = {str(v).upper() for v in (values or [])}
+        for cb in (checkboxes or []):
+            try:
+                cb.setChecked(cb.text().upper() in wanted)
+            except Exception:
+                pass
+
+    def _preset_definitions(self):
+        return {
+            "Szybki start": {
+                "transcription_model": "Whisper (lokalny)",
+                "translation_model": "Brak",
+                "summary_model": "Brak",
+                "correction_model": "Brak",
+                "formats_original": ["TXT", "SRT"],
+                "formats_translated": [],
+                "formats_summary": [],
+            },
+            "Transkrypcja + tłumaczenie": {
+                "transcription_model": "Whisper (lokalny)",
+                "translation_model": "NLLB (lokalny)",
+                "summary_model": "Brak",
+                "correction_model": "Brak",
+                "formats_original": ["TXT", "SRT"],
+                "formats_translated": ["TXT", "DOCX", "SRT"],
+                "formats_summary": [],
+            },
+            "Pełny pipeline": {
+                "transcription_model": "Whisper (lokalny)",
+                "translation_model": "NLLB (lokalny)",
+                "summary_model": "BART (lokalny)",
+                "correction_model": "Brak",
+                "formats_original": ["TXT", "DOCX", "SRT"],
+                "formats_translated": ["TXT", "DOCX", "SRT"],
+                "formats_summary": ["TXT", "DOCX"],
+            },
+            "Tekst -> tłumaczenie/streszczenie": {
+                "transcription_model": "Brak",
+                "translation_model": "NLLB (lokalny)",
+                "summary_model": "BART (lokalny)",
+                "correction_model": "Brak",
+                "formats_original": ["TXT"],
+                "formats_translated": ["TXT", "DOCX"],
+                "formats_summary": ["TXT", "DOCX"],
+            },
+        }
+
+    @Slot()
+    def apply_selected_preset(self):
+        preset_name = self.preset_group.preset_combo.currentText()
+        preset = self._preset_definitions().get(preset_name)
+        if not preset:
+            self.append_log(f"Nie znaleziono presetu: {preset_name}", "warning")
+            return
+
+        prev_suppress = getattr(self, '_suppress_save', False)
+        self._suppress_save = True
+        try:
+            self.transcription_group.model_combo.setCurrentText(preset.get("transcription_model", "Whisper (lokalny)"))
+            self.translation_group.translation_combo.setCurrentText(preset.get("translation_model", "Brak"))
+            self.summary_group.summary_combo.setCurrentText(preset.get("summary_model", "Brak"))
+            self.transcription_group.correction_combo.setCurrentText(preset.get("correction_model", "Brak"))
+
+            self._set_checkbox_group(self.formats_group.original_checkboxes, preset.get("formats_original", []))
+            self._set_checkbox_group(self.formats_group.translated_checkboxes, preset.get("formats_translated", []))
+            self._set_checkbox_group(self.formats_group.summary_checkboxes, preset.get("formats_summary", []))
+        finally:
+            self._suppress_save = prev_suppress
+
+        self._update_ui_state()
+        self._save_current_settings()
+        self.append_log(f"Zastosowano preset pipeline: {preset_name}", "success")
 
     def _save_current_settings(self):
         # If we're applying settings or otherwise suppressing saves, skip persisting
@@ -972,14 +1069,13 @@ class MainWindow(QMainWindow):
         td = tempfile.gettempdir()
         self.append_log(f"Temp dir: {td}", "info")
 
-        # downloads dir in project if exists
-        downloads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'downloads')
+        # output dir in project if exists
         if os.path.exists(downloads_dir):
             try:
                 n_files = len([f for f in os.listdir(downloads_dir) if os.path.isfile(os.path.join(downloads_dir, f))])
-                self.append_log(f"Downloads folder: {downloads_dir} (files={n_files})", "info")
+                self.append_log(f"Output folder: {downloads_dir} (files={n_files})", "info")
             except Exception:
-                self.append_log(f"Downloads folder present: {downloads_dir}", "info")
+                self.append_log(f"Output folder present: {downloads_dir}", "info")
 
         # Key library versions
         libs = ['torch', 'ctranslate2', 'httpx', 'faster_whisper']
@@ -1015,6 +1111,9 @@ class MainWindow(QMainWindow):
         config = self.get_transcription_config()
         if not config:
             return
+
+        if not self._show_preflight_checklist(config, url, self.local_files):
+            return
         
         if config.enable_diarization and not config.hf_token:
             self.append_log("Błąd: Diaryzacja jest włączona, ale nie podano tokenu Hugging Face.", "error")
@@ -1046,6 +1145,107 @@ class MainWindow(QMainWindow):
         self.thread.preview_signal.connect(self._on_worker_preview_result)
         self.thread.finished_signal.connect(self.on_finished)
         self.thread.start()
+
+    def _collect_preflight_issues(self, config, url: str, local_files: list):
+        errors = []
+        warnings = []
+        infos = []
+
+        text_exts = {".txt", ".docx", ".srt"}
+        source_paths = list(local_files or [])
+        has_url = bool(str(url or "").strip())
+        has_non_text_file = any(os.path.splitext(p)[1].lower() not in text_exts for p in source_paths)
+        has_text_non_srt_file = any(os.path.splitext(p)[1].lower() in {".txt", ".docx"} for p in source_paths)
+
+        formats_original = [str(x).lower() for x in (config.formats_original or [])]
+        formats_translated = [str(x).lower() for x in (config.formats_translated or [])]
+        formats_summary = [str(x).lower() for x in (config.formats_summary or [])]
+
+        if not (formats_original or formats_translated or formats_summary):
+            errors.append("Nie wybrano żadnego formatu wyjściowego.")
+
+        transcription_model = str(config.transcription_model or "")
+        translation_model = str(config.translation_model or "")
+        correction_mode = str(config.transcription_correction or "")
+        summary_model = str(config.summary_model or "")
+
+        if transcription_model == "Brak" and (has_url or has_non_text_file):
+            errors.append("Model transkrypcji ustawiony na 'Brak', ale źródło zawiera URL lub plik audio/wideo.")
+
+        if transcription_model == "Brak" and "srt" in formats_original and has_text_non_srt_file:
+            warnings.append("Wybrano zapis SRT dla wejścia TXT/DOCX; bez timestampów SRT może nie zostać zapisany.")
+
+        if correction_mode != "Brak":
+            prompt = str(getattr(config, "correction_prompt", "") or "").strip()
+            if len(prompt) < 20:
+                errors.append("Korekta włączona, ale prompt jest pusty lub za krótki (min. 20 znaków).")
+
+            if "Ollama" in correction_mode and not str(getattr(config, "correction_ollama_model_name", "") or "").strip():
+                errors.append("Korekta Ollama włączona, ale nie wybrano modelu.")
+            if correction_mode == "Gemini" and not str(getattr(config, "gemini_key", "") or "").strip():
+                errors.append("Korekta Gemini włączona, ale brak klucza API Gemini.")
+            if correction_mode == "OpenRouter" and not str(getattr(config, "openrouter_key", "") or "").strip():
+                errors.append("Korekta OpenRouter włączona, ale brak klucza API OpenRouter.")
+
+        if translation_model == "Brak" and formats_translated:
+            warnings.append("Wybrano formaty tłumaczenia, ale model tłumaczenia to 'Brak'.")
+        if translation_model != "Brak" and not formats_translated:
+            warnings.append("Tłumaczenie jest włączone, ale nie wybrano formatu zapisu tłumaczenia.")
+
+        if "Ollama" in translation_model and not str(getattr(config, "ollama_model_name", "") or "").strip():
+            errors.append("Tłumaczenie Ollama włączone, ale nie wybrano modelu.")
+        if translation_model == "OpenRouter" and not str(getattr(config, "openrouter_key", "") or "").strip():
+            errors.append("Tłumaczenie OpenRouter włączone, ale brak klucza API OpenRouter.")
+        if translation_model == "NLLB (lokalny)" and not str(getattr(config, "nllb_variant", "") or "").strip():
+            warnings.append("NLLB bez wybranego wariantu modelu może nie uruchomić tłumaczenia.")
+
+        if summary_model == "Brak" and formats_summary:
+            warnings.append("Wybrano formaty streszczenia, ale model streszczenia to 'Brak'.")
+        if summary_model != "Brak" and not formats_summary:
+            warnings.append("Streszczenie jest włączone, ale nie wybrano formatu zapisu streszczenia.")
+
+        if "Ollama" in summary_model and not str(getattr(config, "ollama_summary_model_name", "") or "").strip():
+            errors.append("Streszczenie Ollama włączone, ale nie wybrano modelu.")
+        if summary_model == "Gemini" and not str(getattr(config, "gemini_key", "") or "").strip():
+            errors.append("Streszczenie Gemini włączone, ale brak klucza API Gemini.")
+        if summary_model == "OpenRouter" and not str(getattr(config, "openrouter_key", "") or "").strip():
+            errors.append("Streszczenie OpenRouter włączone, ale brak klucza API OpenRouter.")
+
+        if config.enable_diarization and not str(getattr(config, "hf_token", "") or "").strip():
+            errors.append("Diaryzacja jest włączona, ale brak tokenu Hugging Face.")
+
+        if not errors and not warnings:
+            infos.append("Checklista OK: nie wykryto problemów konfiguracji.")
+
+        return errors, warnings, infos
+
+    def _show_preflight_checklist(self, config, url: str, local_files: list) -> bool:
+        errors, warnings, infos = self._collect_preflight_issues(config, url, local_files)
+
+        lines = ["Checklista przed startem:"]
+        if errors:
+            lines.append("\nBłędy:")
+            lines.extend([f"- {x}" for x in errors])
+        if warnings:
+            lines.append("\nOstrzeżenia:")
+            lines.extend([f"- {x}" for x in warnings])
+        if infos:
+            lines.append("\nInformacje:")
+            lines.extend([f"- {x}" for x in infos])
+        message = "\n".join(lines)
+
+        if errors:
+            QMessageBox.critical(self, "Checklista konfiguracji - błędy", message)
+            return False
+
+        reply = QMessageBox.question(
+            self,
+            "Checklista konfiguracji",
+            message + "\n\nUruchomić zadanie?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        return reply == QMessageBox.Yes
 
     @Slot(int)
     def _on_progress_updated(self, value: int):

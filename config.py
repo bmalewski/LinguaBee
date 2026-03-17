@@ -11,7 +11,7 @@ import json
 base_path = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
 
 # Define the directory where all output files will be saved.
-downloads_dir = os.path.join(base_path, "downloads")
+downloads_dir = os.path.join(base_path, "output")
 
 # Define the directory where icons are stored.
 icons_dir = os.path.join(base_path, "icons")
@@ -20,7 +20,7 @@ icons_dir = os.path.join(base_path, "icons")
 models_dir = os.path.join(base_path, "models")
 
 
-# Create the downloads and models directories if they don't already exist.
+# Create the output and models directories if they don't already exist.
 os.makedirs(downloads_dir, exist_ok=True)
 os.makedirs(models_dir, exist_ok=True)
 
@@ -118,7 +118,7 @@ class TranscriptionConfig:
     correction_ollama_model_name: Optional[str] = None
     openrouter_model_name: Optional[str] = None
     correction_prompt: Optional[str] = None
-    transcription_segment_batch_size: int = 250
+    transcription_segment_batch_size: int = 200
     translation_ollama_prompt: Optional[str] = None
     translation_openrouter_prompt: Optional[str] = None
     translation_segment_batch_size: int = 250

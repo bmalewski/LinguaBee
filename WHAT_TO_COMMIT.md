@@ -13,7 +13,7 @@
 ## Nie commitować
 - `gemini_api_key.txt`, `openai_api_key.txt`
 - `user_settings.json`
-- `downloads/`
+- `output/`
 - `models/`
 - `ollama_logs/`
 - `venv/`, `.venv/`

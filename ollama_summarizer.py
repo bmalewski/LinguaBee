@@ -3,6 +3,7 @@ import json
 import re
 import os
 import datetime
+from model_response_parser import parse_dict_response
 
 
 class OllamaSummarizer:
@@ -60,32 +61,12 @@ class OllamaSummarizer:
     def _extract_json_candidate(self, text):
         if not text:
             return None
-        t = text.strip()
-        # remove code fences
-        t = re.sub(r"^```(?:json)?\s*", "", t, flags=re.IGNORECASE)
-        t = re.sub(r"\s*```$", "", t)
-        # direct parse
-        try:
-            data = json.loads(t)
-            if isinstance(data, dict):
-                if "propozycje" in data:
-                    return data
-                if all(k in data for k in ["formalne", "intrygujace", "zabawne"]):
-                    return {"propozycje": data}
-        except Exception:
-            pass
-        # find first JSON object
-        m = re.search(r"(\{[\s\S]*\})", t)
-        if m:
-            try:
-                data = json.loads(m.group(1))
-                if isinstance(data, dict):
-                    if "propozycje" in data:
-                        return data
-                    if all(k in data for k in ["formalne", "intrygujace", "zabawne"]):
-                        return {"propozycje": data}
-            except Exception:
-                return None
+        data = parse_dict_response(text)
+        if isinstance(data, dict):
+            if "propozycje" in data:
+                return data
+            if all(k in data for k in ["formalne", "intrygujace", "zabawne"]):
+                return {"propozycje": data}
         return None
 
     def _normalize_language(self, language):

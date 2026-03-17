@@ -26,15 +26,6 @@ def save_docx(text, path):
             doc.add_paragraph(para.strip())
     doc.save(path)
 
-def save_html(text, path):
-    """Saves text to an HTML file."""
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>\n")
-        for line in text.splitlines():
-            if line.strip():
-                f.write(f"<p>{line.strip()}</p>\n")
-        f.write("</body></html>")
-
 def save_srt(segments, path):
     """Saves transcription segments to an SRT subtitle file."""
     if not segments:

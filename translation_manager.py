@@ -325,7 +325,7 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
     formats_lower = [f.lower() for f in config.formats_translated]
     did_translation = False
 
-    if any(f in formats_lower for f in ["txt", "docx", "html"]):
+    if any(f in formats_lower for f in ["txt", "docx"]):
         did_translation = True
         status_signal.emit("Tłumaczenie tekstu (NLLB)...", "info")
         progress_signal.emit(0)
@@ -496,7 +496,7 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
     formats_lower = [f.lower() for f in config.formats_translated]
 
     try:
-        if any(f in formats_lower for f in ["txt", "docx", "html"]):
+        if any(f in formats_lower for f in ["txt", "docx"]):
             status_signal.emit(f"Tłumaczenie tekstu (Ollama, model: {config.ollama_model_name})...", "info")
             progress_signal.emit(0)
 
@@ -644,7 +644,7 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
     formats_lower = [f.lower() for f in config.formats_translated]
 
     try:
-        if any(f in formats_lower for f in ["txt", "docx", "html"]):
+        if any(f in formats_lower for f in ["txt", "docx"]):
             status_signal.emit(f"Tłumaczenie tekstu (OpenRouter, model: {model_name})...", "info")
             progress_signal.emit(0)
 
@@ -829,7 +829,7 @@ def translate_helsinki(config, original_text, original_segments, whisper_info, s
     formats_lower = [f.lower() for f in config.formats_translated]
     did_translation = False
 
-    if any(f in formats_lower for f in ["txt", "docx", "html"]):
+    if any(f in formats_lower for f in ["txt", "docx"]):
         did_translation = True
         status_signal.emit(f"Tłumaczenie tekstu (Helsinki-NLP, model: {model_name})...", "info")
         progress_signal.emit(0)
