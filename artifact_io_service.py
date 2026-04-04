@@ -33,7 +33,7 @@ def read_artifact(path: str, ext: str) -> TextArtifact:
     return TextArtifact(text="", segments=None)
 
 
-def write_artifact(text: str, segments: Optional[list], path: str, ext: str) -> None:
+def write_artifact(text: str, segments: Optional[list], path: str, ext: str, srt_max_lines: Optional[int] = None, srt_max_chars_per_line: Optional[int] = None) -> None:
     fmt = str(ext or "").lower().lstrip(".")
 
     if fmt == "txt":
@@ -45,7 +45,12 @@ def write_artifact(text: str, segments: Optional[list], path: str, ext: str) -> 
         return
 
     if fmt == "srt":
-        save_srt(segments or [], path)
+        save_srt(
+            segments or [],
+            path,
+            max_lines=srt_max_lines,
+            max_chars_per_line=srt_max_chars_per_line,
+        )
         return
 
 

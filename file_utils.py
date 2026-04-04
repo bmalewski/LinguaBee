@@ -2,6 +2,7 @@ from docx import Document
 import os
 import av
 import re
+import textwrap
 from config import downloads_dir
 
 def format_timestamp(seconds):
@@ -26,20 +27,80 @@ def save_docx(text, path):
             doc.add_paragraph(para.strip())
     doc.save(path)
 
-def save_srt(segments, path):
+def _split_text_for_srt(text: str, max_chars_per_line: int, max_lines: int):
+    raw = (text or "").strip()
+    if not raw:
+        return []
+
+    if max_chars_per_line <= 0:
+        return [raw]
+
+    wrapped = textwrap.wrap(
+        raw,
+        width=max_chars_per_line,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    if not wrapped:
+        wrapped = [raw]
+
+    if max_lines <= 0:
+        return ["\n".join(wrapped)]
+
+    blocks = []
+    for i in range(0, len(wrapped), max_lines):
+        chunk = wrapped[i:i + max_lines]
+        if chunk:
+            blocks.append("\n".join(chunk))
+    return blocks
+
+
+def save_srt(segments, path, max_lines=None, max_chars_per_line=None):
     """Saves transcription segments to an SRT subtitle file."""
     if not segments:
         return
+
+    try:
+        max_lines = int(max_lines if max_lines is not None else 2)
+    except Exception:
+        max_lines = 2
+    try:
+        max_chars_per_line = int(max_chars_per_line if max_chars_per_line is not None else 25)
+    except Exception:
+        max_chars_per_line = 25
+
     with open(path, "w", encoding="utf-8") as f:
-        for i, seg in enumerate(segments, start=1):
+        cue_idx = 1
+        for seg in segments:
             start = format_timestamp(seg.get("start", 0))
             end = format_timestamp(seg.get("end", seg.get("start", 0)))
             text = seg.get("text", "").strip()
             if not text:
                 continue
-            f.write(f"{i}\n")
-            f.write(f"{start} --> {end}\n")
-            f.write(f"{text}\n\n")
+
+            blocks = _split_text_for_srt(text, max_chars_per_line=max_chars_per_line, max_lines=max_lines)
+            if not blocks:
+                continue
+
+            if len(blocks) == 1:
+                f.write(f"{cue_idx}\n")
+                f.write(f"{start} --> {end}\n")
+                f.write(f"{blocks[0]}\n\n")
+                cue_idx += 1
+                continue
+
+            seg_start = float(seg.get("start", 0.0) or 0.0)
+            seg_end = float(seg.get("end", seg_start) or seg_start)
+            duration = max(0.001, seg_end - seg_start)
+            block_duration = duration / len(blocks)
+
+            for block_i, block_text in enumerate(blocks):
+                block_start = seg_start + (block_i * block_duration)
+                block_end = seg_end if block_i == len(blocks) - 1 else block_start + block_duration
+                f.write(f"{cue_idx}\n")
+                f.write(f"{format_timestamp(block_start)} --> {format_timestamp(block_end)}\n")
+                f.write(f"{block_text}\n\n")
+                cue_idx += 1
 
 
 def _parse_srt_timestamp(value: str) -> float:

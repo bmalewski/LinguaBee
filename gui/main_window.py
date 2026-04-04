@@ -51,6 +51,8 @@ class MainWindow(QMainWindow):
         self.whisper_enable_normalization = False
         self.whisper_force_mono = True
         self.transcription_segment_batch_size = 200
+        self.whisper_srt_max_lines = 2
+        self.whisper_srt_max_chars_per_line = 25
         self.nllb_variant = None
         self.nllb_device = "cpu"
         self.nllb_device_index = 0
@@ -594,13 +596,16 @@ class MainWindow(QMainWindow):
                 self.enable_diarization,
                 self.diarization_num_speakers,
                 self.transcription_segment_batch_size,
+                self.whisper_srt_max_lines,
+                self.whisper_srt_max_chars_per_line,
             )
             if dialog.exec():
                 settings = dialog.get_settings()
                 (self.whisper_variant, device_settings, self.whisper_delete_audio, 
                  self.whisper_enable_paragraphing, self.whisper_enable_denoising, self.whisper_enable_normalization, 
                  self.whisper_force_mono, self.enable_diarization, self.diarization_num_speakers,
-                 self.transcription_segment_batch_size) = settings
+                 self.transcription_segment_batch_size, self.whisper_srt_max_lines,
+                 self.whisper_srt_max_chars_per_line) = settings
                 self.whisper_device = device_settings['device']
                 self.whisper_device_index = device_settings.get('device_index', 0)
                 self.append_log(f"Ustawiono Whisper: {self.whisper_variant}, {self.whisper_device}", "info")
@@ -832,6 +837,8 @@ class MainWindow(QMainWindow):
             self.whisper_enable_normalization = settings.get('enable_normalization', self.whisper_enable_normalization)
             self.whisper_force_mono = settings.get('force_mono', self.whisper_force_mono)
             self.transcription_segment_batch_size = settings.get('transcription_segment_batch_size', self.transcription_segment_batch_size)
+            self.whisper_srt_max_lines = int(settings.get('whisper_srt_max_lines', self.whisper_srt_max_lines))
+            self.whisper_srt_max_chars_per_line = int(settings.get('whisper_srt_max_chars_per_line', self.whisper_srt_max_chars_per_line))
             self.translation_segment_batch_size = settings.get('translation_segment_batch_size', self.translation_segment_batch_size)
 
             # Diarization
@@ -956,6 +963,8 @@ class MainWindow(QMainWindow):
                 'enable_normalization': self.whisper_enable_normalization,
                 'force_mono': self.whisper_force_mono,
                 'transcription_segment_batch_size': self.transcription_segment_batch_size,
+                'whisper_srt_max_lines': self.whisper_srt_max_lines,
+                'whisper_srt_max_chars_per_line': self.whisper_srt_max_chars_per_line,
                 'translation_segment_batch_size': self.translation_segment_batch_size,
                 'enable_diarization': self.enable_diarization,
                 'diarization_num_speakers': self.diarization_num_speakers,
@@ -1324,7 +1333,9 @@ class MainWindow(QMainWindow):
             num_speakers=self.diarization_num_speakers if self.enable_diarization else 0,
             enable_denoising=self.whisper_enable_denoising,
             enable_normalization=self.whisper_enable_normalization,
-            force_mono=self.whisper_force_mono
+            force_mono=self.whisper_force_mono,
+            srt_max_lines=self.whisper_srt_max_lines,
+            srt_max_chars_per_line=self.whisper_srt_max_chars_per_line
         )
 
     def on_finished(self, msg, msg_type):

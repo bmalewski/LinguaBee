@@ -470,7 +470,14 @@ class TranscriptionThread(QThread):
                                         else:
                                             write_artifact(text=formatted_text if formatted_text is not None else text, segments=None, path=path, ext=ext)
                                     elif ext == "srt" and segments:
-                                        write_artifact(text="", segments=segments, path=path, ext=ext)
+                                        write_artifact(
+                                            text="",
+                                            segments=segments,
+                                            path=path,
+                                            ext=ext,
+                                            srt_max_lines=getattr(self.config, 'srt_max_lines', 2),
+                                            srt_max_chars_per_line=getattr(self.config, 'srt_max_chars_per_line', 25),
+                                        )
                                 except Exception as e:
                                     # don't fail the whole job if a particular format fails
                                     self.status_signal.emit(f"Błąd zapisu formatu {ext}: {e}", "warning")

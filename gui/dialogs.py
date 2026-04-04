@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QComboBox, QChec
 # ApiKeyDialog removed: OpenAI/Gemini API key dialogs are no longer used in the GUI per user request.
 
 class WhisperSettingsDialog(QDialog):
-    def __init__(self, parent, available_devices, current_variant, current_device, current_device_index, current_delete_audio, current_enable_paragraphing, current_enable_denoising, current_enable_normalization, current_force_mono, current_enable_diarization, current_num_speakers, current_transcription_segment_batch_size=200):
+    def __init__(self, parent, available_devices, current_variant, current_device, current_device_index, current_delete_audio, current_enable_paragraphing, current_enable_denoising, current_enable_normalization, current_force_mono, current_enable_diarization, current_num_speakers, current_transcription_segment_batch_size=200, current_srt_max_lines=2, current_srt_max_chars_per_line=25):
         super().__init__(parent) # Poprawka: przekazanie argumentów do konstruktora
         self.setWindowTitle("Ustawienia Whisper")
         self.available_devices = available_devices
@@ -94,6 +94,18 @@ class WhisperSettingsDialog(QDialog):
         self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 200))
         post_proc_layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"))
         post_proc_layout.addWidget(self.transcription_segment_batch_spin)
+
+        self.srt_max_lines_spin = QSpinBox()
+        self.srt_max_lines_spin.setRange(1, 6)
+        self.srt_max_lines_spin.setValue(int(current_srt_max_lines or 2))
+        post_proc_layout.addWidget(QLabel("Maksymalna liczba linii w napisach (SRT):"))
+        post_proc_layout.addWidget(self.srt_max_lines_spin)
+
+        self.srt_max_chars_per_line_spin = QSpinBox()
+        self.srt_max_chars_per_line_spin.setRange(10, 120)
+        self.srt_max_chars_per_line_spin.setValue(int(current_srt_max_chars_per_line or 25))
+        post_proc_layout.addWidget(QLabel("Maksymalna liczba znaków w linii SRT:"))
+        post_proc_layout.addWidget(self.srt_max_chars_per_line_spin)
         
         post_proc_group.setLayout(post_proc_layout)
         form_layout.addWidget(post_proc_group)
@@ -125,7 +137,9 @@ class WhisperSettingsDialog(QDialog):
             self.mono_checkbox.isChecked(),
             self.diarization_group.isChecked(),
             self.num_speakers_spinbox.value(),
-            self.transcription_segment_batch_spin.value()
+            self.transcription_segment_batch_spin.value(),
+            self.srt_max_lines_spin.value(),
+            self.srt_max_chars_per_line_spin.value()
         )
 
 class NllbSettingsDialog(QDialog):

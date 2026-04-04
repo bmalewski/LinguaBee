@@ -113,6 +113,9 @@ class TranscriptionConfig:
     enable_denoising: bool = False
     enable_normalization: bool = False
     force_mono: bool = True
+    # SRT line formatting options for transcription output
+    srt_max_lines: int = 2
+    srt_max_chars_per_line: int = 25
     # Correction / post-editing options (UI)
     transcription_correction: str = "Brak"
     correction_ollama_model_name: Optional[str] = None
