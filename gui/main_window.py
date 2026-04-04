@@ -343,6 +343,13 @@ class MainWindow(QMainWindow):
         left_panel_layout.addWidget(self.progress_bar)
         left_panel_layout.addWidget(self.log_box)
 
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(8)
+        button_layout.addWidget(self.start_btn, 3)
+        button_layout.addWidget(self.stop_btn, 1)
+        left_panel_layout.addLayout(button_layout)
+
         left_panel_widget = QWidget()
         left_panel_widget.setLayout(left_panel_layout)
         left_panel_widget.setFixedWidth(self.left_sections_fixed_width)
@@ -355,11 +362,6 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.preview_group, 1)
 
         self.layout.addLayout(content_layout)
-
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(self.start_btn, 3)
-        button_layout.addWidget(self.stop_btn, 1)
-        self.layout.addLayout(button_layout)
 
     def _connect_signals(self):
         self.source_group.url_entry.textChanged.connect(self.clear_local_files)
