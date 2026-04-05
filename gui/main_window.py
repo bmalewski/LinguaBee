@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         self.whisper_enable_paragraphing = True
         self.whisper_enable_denoising = False
         self.whisper_enable_normalization = False
-        self.whisper_force_mono = True
+        self.whisper_force_mono = False
         self.transcription_segment_batch_size = 200
         self.whisper_srt_max_lines = 2
         self.whisper_srt_max_chars_per_line = 25

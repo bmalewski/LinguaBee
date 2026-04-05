@@ -43,17 +43,37 @@ class WhisperSettingsDialog(QDialog):
         # --- Audio Processing Settings ---
         audio_group = QGroupBox("Przetwarzanie Audio")
         audio_layout = QVBoxLayout()
-        self.denoising_checkbox = QCheckBox("Włącz odszumianie (może poprawić jakość na zaszumionych nagraniach)")
+
+        preset_row = QHBoxLayout()
+        self.audio_preset_combo = QComboBox()
+        self.audio_preset_combo.addItem("Niestandardowe", userData="custom")
+        self.audio_preset_combo.addItem("Bez poprawy", userData="none")
+        self.audio_preset_combo.addItem("Lekka poprawa (wyrównanie)", userData="light")
+        self.audio_preset_combo.addItem("Szumy i głośność (odszumianie + wyrównanie)", userData="noisy")
+        self.apply_audio_preset_btn = QPushButton("Zastosuj preset")
+        self.apply_audio_preset_btn.clicked.connect(self._apply_audio_preset)
+        preset_row.addWidget(QLabel("Preset jakości:"))
+        preset_row.addWidget(self.audio_preset_combo, 1)
+        preset_row.addWidget(self.apply_audio_preset_btn)
+        audio_layout.addLayout(preset_row)
+
+        self.denoising_checkbox = QCheckBox("Włącz łagodne odszumianie (zalecane tylko dla zaszumionych nagrań)")
         self.denoising_checkbox.setChecked(current_enable_denoising)
         audio_layout.addWidget(self.denoising_checkbox)
 
-        self.normalization_checkbox = QCheckBox("Normalizuj głośność audio (wyrównuje poziomy dźwięku)")
+        self.normalization_checkbox = QCheckBox("Wyrównaj głośność audio (łagodna normalizacja)")
         self.normalization_checkbox.setChecked(current_enable_normalization)
         audio_layout.addWidget(self.normalization_checkbox)
 
         self.mono_checkbox = QCheckBox("Konwertuj do mono (zalecane dla diaryzacji)")
         self.mono_checkbox.setChecked(current_force_mono)
         audio_layout.addWidget(self.mono_checkbox)
+
+        self.denoising_checkbox.toggled.connect(self._sync_audio_preset_from_checkboxes)
+        self.normalization_checkbox.toggled.connect(self._sync_audio_preset_from_checkboxes)
+        self.mono_checkbox.toggled.connect(self._sync_audio_preset_from_checkboxes)
+        self._sync_audio_preset_from_checkboxes()
+
         audio_group.setLayout(audio_layout)
         form_layout.addWidget(audio_group)
 
@@ -117,6 +137,43 @@ class WhisperSettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _sync_audio_preset_from_checkboxes(self):
+        denoise = self.denoising_checkbox.isChecked()
+        normalize = self.normalization_checkbox.isChecked()
+        mono = self.mono_checkbox.isChecked()
+
+        if not denoise and not normalize and not mono:
+            key = "none"
+        elif not denoise and normalize and not mono:
+            key = "light"
+        elif denoise and normalize and not mono:
+            key = "noisy"
+        else:
+            key = "custom"
+
+        idx = self.audio_preset_combo.findData(key)
+        if idx >= 0:
+            self.audio_preset_combo.blockSignals(True)
+            self.audio_preset_combo.setCurrentIndex(idx)
+            self.audio_preset_combo.blockSignals(False)
+
+    def _apply_audio_preset(self):
+        key = self.audio_preset_combo.currentData()
+        if key == "none":
+            self.denoising_checkbox.setChecked(False)
+            self.normalization_checkbox.setChecked(False)
+            self.mono_checkbox.setChecked(False)
+        elif key == "light":
+            self.denoising_checkbox.setChecked(False)
+            self.normalization_checkbox.setChecked(True)
+            self.mono_checkbox.setChecked(False)
+        elif key == "noisy":
+            self.denoising_checkbox.setChecked(True)
+            self.normalization_checkbox.setChecked(True)
+            self.mono_checkbox.setChecked(False)
+
+        self._sync_audio_preset_from_checkboxes()
 
     def get_settings(self):
         # Find the data for the selected device

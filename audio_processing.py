@@ -1,11 +1,10 @@
 import torch
 from pyannote.audio import Pipeline
 import noisereduce as nr
-import librosa
 import soundfile as sf
 from pydub import AudioSegment
-from pydub.effects import normalize as pydub_normalize
 import os
+import numpy as np
 from config import downloads_dir
 
 # Keep a global cache for the pipeline to avoid reloading it.
@@ -158,13 +157,13 @@ def process_audio(audio_path: str, config, status_signal) -> str:
     do_normalize = getattr(config, 'enable_normalization', False)
     do_mono = getattr(config, 'force_mono', False)
 
-    if not any([do_denoise, do_normalize, do_mono, do_mono]):
+    if not any([do_denoise, do_normalize, do_mono]):
         return audio_path # No processing needed
 
     try:
         status_signal.emit("Przetwarzanie audio (odszumianie/normalizacja/mono)...", "info")
         
-        # 1. Load audio using pydub, which is great for format handling and normalization
+        # 1. Load audio using pydub (format-safe input handling)
         audio_segment = AudioSegment.from_file(audio_path)
 
         # 2. Convert to mono if requested
@@ -172,26 +171,60 @@ def process_audio(audio_path: str, config, status_signal) -> str:
             status_signal.emit(" - Krok 1: Konwersja do mono...", "info")
             audio_segment = audio_segment.set_channels(1)
 
-        # 3. Perform loudness normalization if enabled (more intelligent than peak normalization)
-        if do_normalize:
-            status_signal.emit(" - Krok 2: Normalizacja głośności (LUFS)...", "info")
-            # Normalize to a standard -20.0 dBFS loudness. This is a good target for speech.
-            audio_segment = pydub_normalize(audio_segment, headroom=0.1)
-
-        # 4. Get audio data as numpy array for noise reduction
+        # 3. Convert audio to float32 numpy and handle channel layout correctly.
         sample_rate = audio_segment.frame_rate
-        audio_data = audio_segment.get_array_of_samples()
-        # Convert to float, which is required by noisereduce
-        import numpy as np
-        audio_data = np.array(audio_data).astype(np.float32) / (2**(audio_segment.sample_width * 8 - 1))
-        
-        # 5. Perform noise reduction if enabled, but with less aggression
+        audio_data = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
+        max_int = float(2 ** (audio_segment.sample_width * 8 - 1))
+        if max_int <= 0:
+            max_int = 32768.0
+        audio_data = audio_data / max_int
+
+        channels = int(audio_segment.channels or 1)
+        if channels > 1:
+            try:
+                audio_data = audio_data.reshape((-1, channels))
+            except Exception:
+                # Fallback if channel shape is unexpected
+                audio_data = audio_data.reshape((-1, 1))
+
+        # 4. Perform gentle noise reduction first, before any gain changes.
         if do_denoise:
-            status_signal.emit(" - Krok 3: Odszumianie (mniej agresywne)...", "info")
-            # Use a less aggressive noise reduction setting.
-            # prop_decrease=0.9 means it will reduce noise by 90% of the default, leaving more of the original signal.
-            audio_data = nr.reduce_noise(y=audio_data, sr=sample_rate, prop_decrease=0.9)
-        
+            status_signal.emit(" - Krok 2: Odszumianie (łagodne)...", "info")
+            duration_sec = float(audio_data.shape[0]) / float(sample_rate or 1)
+            if duration_sec >= 0.5:
+                if audio_data.ndim == 1:
+                    audio_data = nr.reduce_noise(
+                        y=audio_data,
+                        sr=sample_rate,
+                        prop_decrease=0.55,
+                    )
+                else:
+                    denoised_channels = []
+                    for ch in range(audio_data.shape[1]):
+                        denoised_channels.append(
+                            nr.reduce_noise(
+                                y=audio_data[:, ch],
+                                sr=sample_rate,
+                                prop_decrease=0.55,
+                            )
+                        )
+                    audio_data = np.stack(denoised_channels, axis=1)
+            else:
+                status_signal.emit(" - Pomijam odszumianie: zbyt krótki materiał audio.", "info")
+
+        # 5. Apply gentle loudness leveling (RMS target with gain limits).
+        if do_normalize:
+            status_signal.emit(" - Krok 3: Wyrównanie głośności (łagodne)...", "info")
+            rms = float(np.sqrt(np.mean(np.square(audio_data))) + 1e-12)
+            current_db = 20.0 * np.log10(rms)
+            target_db = -22.0
+            gain_db = max(-3.0, min(6.0, target_db - current_db))
+            gain = float(10.0 ** (gain_db / 20.0))
+            audio_data = audio_data * gain
+
+        # Safety clip to avoid introducing digital clipping after processing.
+        audio_data = np.clip(audio_data, -0.98, 0.98).astype(np.float32)
+
         # 6. Create a path for the new, processed file
         base_name = os.path.splitext(os.path.basename(audio_path))[0]
         # Ensure the original base name doesn't already end with '_audio' from video extraction

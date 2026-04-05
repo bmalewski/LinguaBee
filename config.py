@@ -112,7 +112,7 @@ class TranscriptionConfig:
     # Denoising option
     enable_denoising: bool = False
     enable_normalization: bool = False
-    force_mono: bool = True
+    force_mono: bool = False
     # SRT line formatting options for transcription output
     srt_max_lines: int = 2
     srt_max_chars_per_line: int = 25
