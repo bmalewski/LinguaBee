@@ -18,6 +18,7 @@ __pycache__/
 
 # --- Dane lokalne / artefakty runtime ---
 /downloads
+/output
 /models
 /ollama_logs
 /ollama_diagnostic_response.txt
