@@ -96,15 +96,13 @@ class WhisperTranscription:
             segments_generator, info = model.transcribe(
                 audio_path,
                 language=self.config.src_lang_code if self.config.src_lang_code != "auto" else None,
-                beam_size=10,
+                beam_size=5,
                 chunk_length=30, # Długość fragmentu audio w sekundach
                 word_timestamps=True,
-                patience=2,
-                repetition_penalty=1.5,
-                no_repeat_ngram_size=10,
-                log_prob_threshold=-1.0,
-                condition_on_previous_text=False,
-                temperature=0,
+                vad_filter=True, # Włączenie filtru VAD znacząco redukuje halucynacje
+                condition_on_previous_text=False, # Zmniejsza ryzyko pętli halucynacji
+                # Usunięto restrykcyjne parametry (temperature=0, repetition_penalty),
+                # co pozwala modelowi na wbudowany fallback w razie błędów i zapobiega pomijaniu fragmentów
             )
             
             total_duration = info.duration
