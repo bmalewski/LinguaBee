@@ -61,10 +61,6 @@ def save_srt(segments, path, max_lines=None, max_chars_per_line=None):
         return
 
     try:
-        max_lines = int(max_lines if max_lines is not None else 2)
-    except Exception:
-        max_lines = 2
-    try:
         max_chars_per_line = int(max_chars_per_line if max_chars_per_line is not None else 25)
     except Exception:
         max_chars_per_line = 25
@@ -72,35 +68,27 @@ def save_srt(segments, path, max_lines=None, max_chars_per_line=None):
     with open(path, "w", encoding="utf-8") as f:
         cue_idx = 1
         for seg in segments:
-            start = format_timestamp(seg.get("start", 0))
-            end = format_timestamp(seg.get("end", seg.get("start", 0)))
+            start = format_timestamp(seg.get("start", 0.0))
+            end = format_timestamp(seg.get("end", seg.get("start", 0.0)))
             text = seg.get("text", "").strip()
             if not text:
                 continue
 
-            blocks = _split_text_for_srt(text, max_chars_per_line=max_chars_per_line, max_lines=max_lines)
-            if not blocks:
-                continue
+            if max_chars_per_line > 0:
+                wrapped = textwrap.wrap(
+                    text,
+                    width=max_chars_per_line,
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+                formatted_text = "\n".join(wrapped) if wrapped else text
+            else:
+                formatted_text = text
 
-            if len(blocks) == 1:
-                f.write(f"{cue_idx}\n")
-                f.write(f"{start} --> {end}\n")
-                f.write(f"{blocks[0]}\n\n")
-                cue_idx += 1
-                continue
-
-            seg_start = float(seg.get("start", 0.0) or 0.0)
-            seg_end = float(seg.get("end", seg_start) or seg_start)
-            duration = max(0.001, seg_end - seg_start)
-            block_duration = duration / len(blocks)
-
-            for block_i, block_text in enumerate(blocks):
-                block_start = seg_start + (block_i * block_duration)
-                block_end = seg_end if block_i == len(blocks) - 1 else block_start + block_duration
-                f.write(f"{cue_idx}\n")
-                f.write(f"{format_timestamp(block_start)} --> {format_timestamp(block_end)}\n")
-                f.write(f"{block_text}\n\n")
-                cue_idx += 1
+            f.write(f"{cue_idx}\n")
+            f.write(f"{start} --> {end}\n")
+            f.write(f"{formatted_text}\n\n")
+            cue_idx += 1
 
 
 def _parse_srt_timestamp(value: str) -> float:

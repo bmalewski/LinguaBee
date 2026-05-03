@@ -1,3 +1,9 @@
+# LinguaBee 0.9.8a
+
+## Co nowego w 0.9.8a?
+- Poprawa formatowania plików `.srt`: usunięto sztywne łamanie linii ograniczające precyzję. Segmenty ponownie naturalnie dzieli interpunkcja (. , ! ?), bez ignorowania struktury w ujęciach z dużymi limitem linii.
+- Usunięto błąd konfliktu `max_lines` z mechanizmem naturalnego podziału segmentów z Whisper. Zapis SRT dostosowuje się jedynie do limitu znaków, zawijając mądrze tekst bez modyfikacji naturalnych tagów czasowych wyrazów.
+
 # LinguaBee 0.9.8
 
 ## Co nowego?
@@ -14,4 +20,4 @@ LinguaBee 0.9.8 skupia się na poprawie stabilności modułu transkrypcji Whispe
 - `whisper_transcription.py` (Modyfikacja argumentów funkcji `.transcribe()`)
 - `setup.iss` (AppVersion 0.9.8)
 
-- Tag: `v0.9.8`
+- Tag: `v0.9.8a`

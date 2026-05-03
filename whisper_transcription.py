@@ -33,6 +33,85 @@ class WhisperTranscription:
         self.info = None
         self.text = None
 
+    def _resegment_by_punctuation(self, segments: list) -> list:
+        import re
+        sentence_punct = re.compile(r'[\.\!\?…]+\s*$')
+        comma_punct = re.compile(r'[,:]+\s*$')
+        
+        words = []
+        for s in segments:
+            seg_start = s.get("start", 0.0)
+            seg_end = s.get("end", seg_start)
+            if "words" in s and s["words"]:
+                for w in s["words"]:
+                    w_dict = w if isinstance(w, dict) else {"word": str(w)}
+                    word_text = str(w_dict.get("word", "")).strip()
+                    if not word_text:
+                        continue
+                    w_start = w_dict.get("start", seg_start)
+                    w_end = w_dict.get("end", seg_end)
+                    words.append({"word": word_text, "start": w_start, "end": w_end})
+            else:
+                seg_text = str(s.get("text", "")).strip()
+                if not seg_text:
+                    continue
+                w_list = seg_text.split()
+                duration = max(0.001, seg_end - seg_start)
+                w_duration = duration / max(1, len(w_list))
+                for i, w_text in enumerate(w_list):
+                    words.append({
+                        "word": w_text,
+                        "start": seg_start + i * w_duration,
+                        "end": seg_start + (i+1) * w_duration,
+                    })
+
+        if not words:
+            return segments
+
+        new_segments = []
+        cur_words = []
+        
+        for i, w in enumerate(words):
+            cur_words.append(w)
+            is_last = (i == len(words) - 1)
+            
+            gap = 0.0
+            if not is_last:
+                gap = max(0.0, words[i+1]["start"] - w["end"])
+            
+            text_so_far = " ".join([x["word"] for x in cur_words])
+            chars_so_far = len(text_so_far)
+            
+            w_text = w["word"]
+            ends_with_sentence_punct = bool(sentence_punct.search(w_text))
+            ends_with_comma = bool(comma_punct.search(w_text))
+            
+            break_here = False
+            if ends_with_sentence_punct:
+                break_here = True
+            elif ends_with_comma and chars_so_far > 60:
+                break_here = True
+            elif gap > 1.5:
+                break_here = True
+            elif chars_so_far > 120:
+                break_here = True
+                
+            if is_last or break_here:
+                seg_start = cur_words[0]["start"]
+                seg_end = cur_words[-1]["end"]
+                # Dodajemy spacje przed znakami dla czystości formatowania
+                seg_text = " ".join([x["word"] for x in cur_words])
+                
+                new_segments.append({
+                    "start": seg_start,
+                    "end": seg_end,
+                    "text": " " + seg_text,  # Whisper zazwyczaj wstawia spację na początku segmentu
+                    "words": cur_words
+                })
+                cur_words = []
+                
+        return new_segments
+
     def transcribe(self, audio_path):
         global whisper_model_cache
         
@@ -122,6 +201,9 @@ class WhisperTranscription:
             if self._is_stopped(): 
                 self.text, self.segments, self.info = None, None, None
                 return None, None, None
+            
+            # Formowanie segmentów po naturalnych przerwach (kropki, przecinki)
+            segments = self._resegment_by_punctuation(segments)
             
             text = "".join(text_list)
             self.progress_signal.emit(100)
