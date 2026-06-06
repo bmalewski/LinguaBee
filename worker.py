@@ -20,7 +20,7 @@ from whisper_paragrafizer import paragraphs_to_plaintext
 import httpx
 try:
     from whisper_aligner import forced_align_refined_text
-except Exception:
+except (ImportError, ModuleNotFoundError):
     forced_align_refined_text = None
 
 # Global cache for models
@@ -245,7 +245,12 @@ class TranscriptionThread(QThread):
                     # Opcjonalne przetwarzanie audio (odszumianie, normalizacja, mono)
                     # Uruchamiamy przetwarzanie w izolowanym subprocessie, aby uniknąć
                     # deadlocków / crashy natywnych bibliotek (torch/pyannote) na Windows.
-                    if not is_srt_input and not is_text_input:
+                    _needs_audio_proc = any([
+                        getattr(self.config, 'enable_denoising', False),
+                        getattr(self.config, 'enable_normalization', False),
+                        getattr(self.config, 'force_mono', False),
+                    ])
+                    if not is_srt_input and not is_text_input and _needs_audio_proc:
                         try:
                             import subprocess, json, sys
 

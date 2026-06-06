@@ -23,144 +23,19 @@ class CorrectionAdapters:
         self._ollama_refiner = None
 
     def _send_to_gemini(self, api_key: str, prompt: str, input_text: str, model: str = "gemini-2.5-flash") -> str:
-        """Send prompt+input to Gemini-style Generative API via REST (best-effort).
-    
-        This uses the Google Generative Language REST stub for simple deployments.
-        If the environment has a different Gemini endpoint, this function may need adjustment.
-        """
-        if not api_key:
-            return ""
-    
-        normalized_model = model.strip() if isinstance(model, str) and model.strip() else "gemini-2.5-flash"
-        if normalized_model.startswith("models/"):
-            normalized_model = normalized_model.split("/", 1)[1]
-    
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": prompt.strip() + "\n\nTekst do poprawy:\n" + input_text.strip()
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.0,
-                "maxOutputTokens": 4096,
-            }
-        }
-    
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{normalized_model}:generateContent"
-        last_error = None
-        with httpx.Client(timeout=90) as c:
-            for attempt in range(4):
-                try:
-                    r = c.post(endpoint + f"?key={api_key}", json=payload, headers={"Content-Type": "application/json"})
-                    if r.status_code in (429, 503) and attempt < 3:
-                        retry_after = r.headers.get("Retry-After")
-                        try:
-                            wait_s = float(retry_after) if retry_after else float(2 ** attempt)
-                        except Exception:
-                            wait_s = float(2 ** attempt)
-                        time.sleep(min(wait_s, 10.0))
-                        continue
-                    r.raise_for_status()
-                    j = r.json()
-                    raw = {'endpoint': endpoint + '?key=REDACTED', 'status': r.status_code, 'response': j}
-                    self._save_raw_gemini_response(raw)
-    
-                    text_parts = []
-    
-                    def _collect_text(node):
-                        if isinstance(node, dict):
-                            t = node.get("text")
-                            if isinstance(t, str) and t.strip():
-                                text_parts.append(t.strip())
-                            for v in node.values():
-                                _collect_text(v)
-                        elif isinstance(node, list):
-                            for it in node:
-                                _collect_text(it)
-    
-                    _collect_text(j.get("candidates") if isinstance(j, dict) else j)
-                    if text_parts:
-                        return "\n".join(text_parts).strip()
-                    return ""
-                except Exception as e:
-                    last_error = e
-    
-        if last_error is not None:
-            raise last_error
-        return ""
+        from api_client import call_gemini
+        prompt_text = prompt.strip() + "\n\nTekst do poprawy:\n" + input_text.strip()
+        return call_gemini(api_key, model, prompt_text, timeout=90)
 
 
-    def _send_to_openrouter(self, api_key: str, prompt: str, input_text: str, model: str = "google/gemini-2.5-flash") -> str:
-        """Send prompt+input to OpenRouter chat completions endpoint."""
-        if not api_key:
-            return ""
-    
-        normalized_model = model.strip() if isinstance(model, str) and model.strip() else "google/gemini-2.5-flash"
-        payload = {
-            "model": normalized_model,
-            "messages": [
-                {"role": "system", "content": prompt.strip()},
-                {"role": "user", "content": input_text.strip()},
-            ],
-            "temperature": 0.0,
-        }
-    
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://linguabee.local",
-            "X-Title": "LinguaBee",
-        }
-    
-        endpoint = "https://openrouter.ai/api/v1/chat/completions"
-        last_error = None
-        with httpx.Client(timeout=90) as c:
-            for attempt in range(4):
-                try:
-                    r = c.post(endpoint, json=payload, headers=headers)
-                    if r.status_code in (429, 503) and attempt < 3:
-                        retry_after = r.headers.get("Retry-After")
-                        try:
-                            wait_s = float(retry_after) if retry_after else float(2 ** attempt)
-                        except Exception:
-                            wait_s = float(2 ** attempt)
-                        time.sleep(min(wait_s, 10.0))
-                        continue
-                    r.raise_for_status()
-                    j = r.json()
-                    try:
-                        choices = j.get("choices") if isinstance(j, dict) else None
-                        if choices and isinstance(choices, list):
-                            msg = choices[0].get("message", {})
-                            txt = msg.get("content", "")
-                            if isinstance(txt, str):
-                                return txt.strip()
-                    except Exception:
-                        pass
-                    return ""
-                except Exception as e:
-                    last_error = e
-    
-        if last_error is not None:
-            raise last_error
-        return ""
+    def _send_to_openrouter(self, api_key: str, prompt: str, input_text: str, model: str = "google/gemini-3.5-flash") -> str:
+        from api_client import call_openrouter
+        messages = [
+            {"role": "system", "content": prompt.strip()},
+            {"role": "user", "content": input_text.strip()},
+        ]
+        return call_openrouter(api_key, model, messages, timeout=90)
 
-
-    def _save_raw_gemini_response(self, obj: dict):
-        try:
-            import json
-            out_dir = os.path.join(downloads_dir, 'corrected')
-            os.makedirs(out_dir, exist_ok=True)
-            out_file = os.path.join(out_dir, 'raw_gemini_response.json')
-            with open(out_file, 'w', encoding='utf-8') as fh:
-                json.dump(obj, fh, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
 
     def ensure_provider_ready(self, corr_mode: str) -> bool:
         mode = str(corr_mode or "").lower()
@@ -221,7 +96,7 @@ class CorrectionAdapters:
                             gem_key,
                             batch_prompt,
                             numbered_text,
-                            model="gemini-2.5-flash",
+                            model=getattr(self.config, 'gemini_correction_model', 'gemini-2.5-flash'),
                         ),
                         batch_size=getattr(self.config, "transcription_segment_batch_size", 200),
                         inter_batch_sleep_s=4.0,
@@ -236,16 +111,16 @@ class CorrectionAdapters:
                             gem_key,
                             chunk_prompt,
                             chunk_text,
-                            model="gemini-2.5-flash",
+                            model=getattr(self.config, 'gemini_correction_model', 'gemini-2.5-flash'),
                         ),
                         batch_size=200,
                     )
                 else:
-                    refined = self._send_to_gemini(gem_key, prompt_for_file, file_text, model="gemini-2.5-flash")
+                    refined = self._send_to_gemini(gem_key, prompt_for_file, file_text, model=getattr(self.config, 'gemini_correction_model', 'gemini-2.5-flash'))
 
             elif "openrouter" in mode:
                 or_key = getattr(self.config, "openrouter_key", None)
-                or_model = getattr(self.config, "openrouter_model_name", None) or "google/gemini-2.5-flash"
+                or_model = getattr(self.config, "openrouter_model_name", None) or "google/gemini-3.5-flash"
                 if not or_key:
                     self.status_cb("Korekta OpenRouter pominięta: brak klucza API.", "warning")
                     return "", gemini_rate_limited_until

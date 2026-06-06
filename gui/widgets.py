@@ -96,7 +96,15 @@ class TranslationGroup(QGroupBox):
         self.layout.setContentsMargins(6, 4, 6, 4)
         self.translation_combo = QComboBox()
         # Removed OpenAI and Gemini options per user request
-        self.translation_combo.addItems(["Brak", "NLLB (lokalny)", "Helsinki (lokalny)", "Ollama (lokalny)", "OpenRouter"])
+        self.translation_combo.addItems([
+            "Brak",
+            "NLLB (lokalny)",
+            "Helsinki (lokalny)",
+            "Ollama (lokalny)",
+            "OpenRouter",
+            "MLX Apple",
+            "llama.cpp CUDA (lokalny)",
+        ])
         self.translation_combo.setCurrentText("NLLB (lokalny)")
         self.languages = {
             "Angielski": "en",

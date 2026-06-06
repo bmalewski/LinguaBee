@@ -33,6 +33,15 @@ except Exception:
     TORCH_AVAILABLE = False
     CUDA_AVAILABLE = False
 
+# Hardware profile — detected once at import time
+try:
+    from hardware_profile import get_profile, get_auto_defaults
+    _HW_PROFILE = get_profile()
+    _HW_DEFAULTS = get_auto_defaults()
+except Exception:
+    _HW_PROFILE = "cpu"
+    _HW_DEFAULTS = {}
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -42,8 +51,9 @@ class MainWindow(QMainWindow):
         self.local_files = []
         # Populate available devices (CPU + CUDA GPUs when available)
         self.available_devices = self._detect_available_devices()
-        self.whisper_variant = "medium"
-        self.whisper_device = "cpu"
+        # Apply hardware-aware defaults (overridden by saved settings later)
+        self.whisper_variant = _HW_DEFAULTS.get("whisper_variant", "medium")
+        self.whisper_device = _HW_DEFAULTS.get("whisper_device", "cpu")
         self.whisper_device_index = 0
         self.whisper_delete_audio = False
         self.whisper_enable_paragraphing = True
@@ -54,18 +64,24 @@ class MainWindow(QMainWindow):
         self.whisper_srt_max_lines = 2
         self.whisper_srt_max_chars_per_line = 25
         self.nllb_variant = None
-        self.nllb_device = "cpu"
+        self.nllb_device = _HW_DEFAULTS.get("nllb_device", "cpu")
         self.nllb_device_index = 0
         self.translation_segment_batch_size = 250
         self.hf_summary_model_name = "mtj/bart-base-polish-summarization"
-        self.hf_summary_device = "cpu"
+        self.hf_summary_device = _HW_DEFAULTS.get("hf_summary_device", "cpu")
         self.hf_summary_device_index = 0
         self.hf_summary_max_length = 150
         self.hf_summary_min_length = 30
         self.hf_summary_num_beams = 4
+        # MLX (Apple Silicon) settings
+        self.mlx_model_id = _HW_DEFAULTS.get("mlx_model_id", "mlx-community/gemma-3-12b-it-4bit")
+        # llama.cpp (NVIDIA GPU) settings
+        self.llama_cpp_model_repo = "bartowski/gemma-3-12b-it-GGUF"
+        self.llama_cpp_model_file = "gemma-3-12b-it-Q4_K_M.gguf"
+        self.llama_cpp_n_gpu_layers = int(_HW_DEFAULTS.get("llama_cpp_n_gpu_layers", -1))
         self.ollama_model_name = ""
         self.ollama_translation_prompt = ""
-        self.translation_openrouter_model_name = "google/gemini-2.5-flash"
+        self.translation_openrouter_model_name = "google/gemini-3.5-flash"
         self.translation_openrouter_prompt = ""
         self.ollama_summary_model_name = ""
         self.ollama_summary_prompt = ""
@@ -76,10 +92,10 @@ class MainWindow(QMainWindow):
         self.correction_prompt = ""
         self.gemini_key = ""
         self.openrouter_key = ""
-        self.openrouter_model_name = "google/gemini-2.5-flash"
+        self.openrouter_model_name = "google/gemini-3.5-flash"
         self.summary_gemini_prompt = ""
         self.summary_openrouter_prompt = ""
-        self.summary_openrouter_model_name = "google/gemini-2.5-flash"
+        self.summary_openrouter_model_name = "google/gemini-3.5-flash"
         # Forced-alignment settings
         self.enable_forced_alignment = False
         self.forced_alignment_model = ""
@@ -668,7 +684,7 @@ class MainWindow(QMainWindow):
                 key, prompt, model_name, batch_size = dialog.get_settings()
                 self.openrouter_key = key
                 self.translation_openrouter_prompt = prompt
-                self.translation_openrouter_model_name = model_name or "google/gemini-2.5-flash"
+                self.translation_openrouter_model_name = model_name or "google/gemini-3.5-flash"
                 self.translation_segment_batch_size = int(batch_size or self.translation_segment_batch_size)
                 try:
                     st = load_settings() or {}
@@ -678,6 +694,75 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
                 self.append_log(f"Ustawiono model OpenRouter dla tłumaczenia: {self.translation_openrouter_model_name}", "info")
+                self._save_current_settings()
+        elif model == "MLX Apple":
+            from PySide6.QtWidgets import QDialog, QFormLayout, QComboBox, QLineEdit, QDialogButtonBox, QLabel
+            _MLX_PRESETS = [
+                ("Gemma 3 12B (domyślny, ~7 GB)", "mlx-community/gemma-3-12b-it-4bit"),
+                ("Qwen3 14B (~9 GB, najlepsza jakość PL)", "mlx-community/Qwen3-14B-4bit"),
+                ("Mistral Small 3.2 24B (~13 GB, premium)", "mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit"),
+                ("Własny model...", "__custom__"),
+            ]
+            dlg = QDialog(self)
+            dlg.setWindowTitle("MLX — wybór modelu")
+            dlg.setMinimumWidth(520)
+            form = QFormLayout(dlg)
+            combo = QComboBox()
+            for label, mid in _MLX_PRESETS:
+                combo.addItem(label, mid)
+            # Ustaw aktualnie wybrany model
+            for i, (_, mid) in enumerate(_MLX_PRESETS):
+                if mid == self.mlx_model_id:
+                    combo.setCurrentIndex(i)
+                    break
+            else:
+                combo.setCurrentIndex(3)  # własny
+            custom_edit = QLineEdit(self.mlx_model_id)
+            custom_edit.setPlaceholderText("np. mlx-community/moj-model-4bit")
+            custom_label = QLabel("HuggingFace model ID:")
+            def _on_combo_changed(idx):
+                is_custom = combo.itemData(idx) == "__custom__"
+                custom_label.setVisible(is_custom)
+                custom_edit.setVisible(is_custom)
+            combo.currentIndexChanged.connect(_on_combo_changed)
+            _on_combo_changed(combo.currentIndex())
+            form.addRow("Model:", combo)
+            form.addRow(custom_label, custom_edit)
+            btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            btns.accepted.connect(dlg.accept)
+            btns.rejected.connect(dlg.reject)
+            form.addRow(btns)
+            if dlg.exec():
+                chosen = combo.currentData()
+                if chosen == "__custom__":
+                    chosen = custom_edit.text().strip()
+                if chosen:
+                    self.mlx_model_id = chosen
+                    self.append_log(f"Ustawiono model MLX: {self.mlx_model_id}", "info")
+                    self._save_current_settings()
+        elif model == "llama.cpp CUDA (lokalny)":
+            from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QSpinBox, QDialogButtonBox
+            dlg = QDialog(self)
+            dlg.setWindowTitle("llama.cpp CUDA — ustawienia")
+            form = QFormLayout(dlg)
+            repo_edit = QLineEdit(self.llama_cpp_model_repo)
+            file_edit = QLineEdit(self.llama_cpp_model_file)
+            gpu_spin = QSpinBox()
+            gpu_spin.setRange(-1, 200)
+            gpu_spin.setValue(self.llama_cpp_n_gpu_layers)
+            gpu_spin.setToolTip("-1 = wszystkie warstwy na GPU")
+            form.addRow("HF repo (GGUF):", repo_edit)
+            form.addRow("Plik modelu:", file_edit)
+            form.addRow("n_gpu_layers:", gpu_spin)
+            btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            btns.accepted.connect(dlg.accept)
+            btns.rejected.connect(dlg.reject)
+            form.addRow(btns)
+            if dlg.exec():
+                self.llama_cpp_model_repo = repo_edit.text().strip() or self.llama_cpp_model_repo
+                self.llama_cpp_model_file = file_edit.text().strip() or self.llama_cpp_model_file
+                self.llama_cpp_n_gpu_layers = gpu_spin.value()
+                self.append_log(f"Ustawiono llama.cpp: {self.llama_cpp_model_file}, n_gpu_layers={self.llama_cpp_n_gpu_layers}", "info")
                 self._save_current_settings()
 
     def open_correction_settings(self, index):
@@ -723,7 +808,7 @@ class MainWindow(QMainWindow):
                 key, prompt, model_name, batch_size = dlg.get_settings()
                 self.openrouter_key = key
                 self.correction_prompt = prompt
-                self.openrouter_model_name = model_name or "google/gemini-2.5-flash"
+                self.openrouter_model_name = model_name or "google/gemini-3.5-flash"
                 self.transcription_segment_batch_size = int(batch_size or self.transcription_segment_batch_size)
                 try:
                     st = load_settings() or {}
@@ -768,7 +853,7 @@ class MainWindow(QMainWindow):
                 key, prompt, model_name = dlg.get_settings()
                 self.openrouter_key = key
                 self.summary_openrouter_prompt = prompt
-                self.summary_openrouter_model_name = model_name or "google/gemini-2.5-flash"
+                self.summary_openrouter_model_name = model_name or "google/gemini-3.5-flash"
                 try:
                     st = load_settings() or {}
                     st['openrouter_key'] = self.openrouter_key
@@ -816,6 +901,10 @@ class MainWindow(QMainWindow):
             self.nllb_variant = settings.get('nllb_variant', self.nllb_variant)
             self.nllb_device = settings.get('nllb_device', self.nllb_device)
             self.nllb_device_index = settings.get('nllb_device_index', self.nllb_device_index)
+            self.mlx_model_id = settings.get('mlx_model_id', self.mlx_model_id)
+            self.llama_cpp_model_repo = settings.get('llama_cpp_model_repo', self.llama_cpp_model_repo)
+            self.llama_cpp_model_file = settings.get('llama_cpp_model_file', self.llama_cpp_model_file)
+            self.llama_cpp_n_gpu_layers = int(settings.get('llama_cpp_n_gpu_layers', self.llama_cpp_n_gpu_layers))
             self.hf_summary_model_name = settings.get('hf_summary_model_name', self.hf_summary_model_name)
             self.hf_summary_device = settings.get('hf_summary_device', self.hf_summary_device)
             self.hf_summary_device_index = settings.get('hf_summary_device_index', self.hf_summary_device_index)
@@ -949,6 +1038,10 @@ class MainWindow(QMainWindow):
                 'translation_openrouter_model_name': self.translation_openrouter_model_name,
                 'translation_openrouter_prompt': self.translation_openrouter_prompt,
                 'translation_model': self.translation_group.translation_combo.currentText(),
+                'mlx_model_id': self.mlx_model_id,
+                'llama_cpp_model_repo': self.llama_cpp_model_repo,
+                'llama_cpp_model_file': self.llama_cpp_model_file,
+                'llama_cpp_n_gpu_layers': self.llama_cpp_n_gpu_layers,
                 'translation_src_language': self.translation_group.translation_src_lang_combo.currentText(),
                 'translation_tgt_language': self.translation_group.tgt_lang_combo.currentText(),
                 'summary_model': self.summary_group.summary_combo.currentText(),
@@ -1097,6 +1190,12 @@ class MainWindow(QMainWindow):
                 self.append_log(f"Lib {lib}: {ver}", "info")
             except Exception:
                 self.append_log(f"Lib {lib}: not installed", "warning")
+
+        # Hardware profile
+        try:
+            self.append_log(f"Profil sprzętu: {_HW_DEFAULTS.get('profile_label', _HW_PROFILE)}", "info")
+        except Exception:
+            pass
 
         # CUDA devices info (if any were already enumerated)
         try:
@@ -1335,7 +1434,11 @@ class MainWindow(QMainWindow):
             enable_normalization=self.whisper_enable_normalization,
             force_mono=self.whisper_force_mono,
             srt_max_lines=self.whisper_srt_max_lines,
-            srt_max_chars_per_line=self.whisper_srt_max_chars_per_line
+            srt_max_chars_per_line=self.whisper_srt_max_chars_per_line,
+            mlx_model_id=self.mlx_model_id,
+            llama_cpp_model_repo=self.llama_cpp_model_repo,
+            llama_cpp_model_file=self.llama_cpp_model_file,
+            llama_cpp_n_gpu_layers=self.llama_cpp_n_gpu_layers,
         )
 
     def on_finished(self, msg, msg_type):

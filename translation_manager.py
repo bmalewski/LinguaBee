@@ -1,5 +1,4 @@
 from text_utils import chunk_text, add_missing_spaces
-import httpx
 import time
 import json
 import ast
@@ -10,6 +9,14 @@ try:
     from helsinki_translator import HelsinkiTranslator
 except ImportError:
     HelsinkiTranslator = None
+try:
+    from mlx_translator import translate_mlx
+except ImportError:
+    translate_mlx = None
+try:
+    from llama_cpp_translator import translate_llama_cpp
+except ImportError:
+    translate_llama_cpp = None
 
 # This cache will be managed by the worker thread
 extern_nllb_translator_cache = {}
@@ -143,6 +150,16 @@ def translate(config, original_text, original_segments, whisper_info, status_sig
         return translate_helsinki(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
     elif config.translation_model == "OpenRouter":
         return translate_openrouter(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
+    elif config.translation_model == "MLX Apple":
+        if translate_mlx is None:
+            finished_signal.emit("Błąd: mlx-lm nie jest zainstalowane. Uruchom: pip install mlx-lm", "error")
+            return None, None
+        return translate_mlx(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
+    elif config.translation_model == "llama.cpp CUDA (lokalny)":
+        if translate_llama_cpp is None:
+            finished_signal.emit("Błąd: llama-cpp-python nie jest zainstalowane. Uruchom: pip install llama-cpp-python", "error")
+            return None, None
+        return translate_llama_cpp(config, original_text, original_segments, whisper_info, status_signal, progress_signal, finished_signal, is_stopped)
     return None, None
 
 
@@ -172,8 +189,6 @@ def _build_custom_translation_prompt(custom_prompt: str, src_lang_full: str, tgt
 def _send_to_openrouter_translate(api_key: str, model: str, src_lang_full: str, tgt_lang_full: str, input_text: str, custom_prompt: str = "") -> str:
     if not api_key:
         return ""
-
-    normalized_model = model.strip() if isinstance(model, str) and model.strip() else "google/gemini-2.5-flash"
     system_prompt = (
         "Jesteś tłumaczem. Tłumacz wiernie i naturalnie. "
         "Zwróć wyłącznie przetłumaczony tekst bez komentarzy i bez dodatkowych wyjaśnień."
@@ -184,55 +199,12 @@ def _send_to_openrouter_translate(api_key: str, model: str, src_lang_full: str, 
             f"Przetłumacz z języka {src_lang_full} na język {tgt_lang_full}.\n\n"
             f"Tekst:\n{input_text.strip()}"
         )
-
-    payload = {
-        "model": normalized_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.0,
-    }
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://linguabee.local",
-        "X-Title": "LinguaBee",
-    }
-
-    endpoint = "https://openrouter.ai/api/v1/chat/completions"
-    last_error = None
-    with httpx.Client(timeout=120) as c:
-        for attempt in range(4):
-            try:
-                r = c.post(endpoint, json=payload, headers=headers)
-                if r.status_code in (429, 503) and attempt < 3:
-                    retry_after = r.headers.get("Retry-After")
-                    try:
-                        wait_s = float(retry_after) if retry_after else float(2 ** attempt)
-                    except Exception:
-                        wait_s = float(2 ** attempt)
-                    time.sleep(min(wait_s, 10.0))
-                    continue
-                r.raise_for_status()
-                j = r.json()
-                try:
-                    choices = j.get("choices") if isinstance(j, dict) else None
-                    if choices and isinstance(choices, list):
-                        msg = choices[0].get("message", {})
-                        txt = msg.get("content", "")
-                        if isinstance(txt, str):
-                            return txt.strip()
-                except Exception:
-                    pass
-                return ""
-            except Exception as e:
-                last_error = e
-
-    if last_error is not None:
-        raise last_error
-    return ""
+    from api_client import call_openrouter
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    return call_openrouter(api_key, model, messages, timeout=120)
 
 
 def _normalize_translated_segments(original_segments, translated_segments_for_srt):
@@ -311,7 +283,7 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
     else:
         src_lang_code = config.src_lang_code
         if src_lang_code == 'auto':
-            src_lang_code = whisper_info.language
+            src_lang_code = whisper_info.language or 'en'
     
     nllb_src_lang = lang_code_map.get(src_lang_code)
     nllb_tgt_lang = lang_code_map.get(config.tgt_lang_code)
@@ -460,18 +432,6 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
         translated_text_full = add_missing_spaces("".join(translated_chunks))
         progress_signal.emit(100)
 
-    status_signal.emit("Zwalnianie pamięci VRAM po tłumaczeniu NLLB...", "info")
-    translator.release()
-    extern_nllb_translator_cache.clear()
-    import gc
-    gc.collect()
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except ImportError:
-        pass
-
     # Ensure alignment with original segments
     return translated_text_full, _normalize_translated_segments(original_segments, translated_segments_for_srt)
 
@@ -483,7 +443,7 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
     # Determine language names for the prompt
     src_lang_code = config.src_lang_code
     if src_lang_code == 'auto':
-        src_lang_code = whisper_info.language
+        src_lang_code = whisper_info.language or 'en'
     
     lang_map = {"en": "angielski", "pl": "polski", "de": "niemiecki", "fr": "francuski", "es": "hiszpański", "it": "włoski", "uk": "ukraiński", "ru": "rosyjski", "ja": "japoński", "ko": "koreański", "la": "łaciński"}
     src_lang_full = lang_map.get(src_lang_code, src_lang_code)
@@ -622,14 +582,14 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
         status_signal.emit("Błąd: Brak klucza API OpenRouter dla tłumaczenia.", "error")
         return None, None
 
-    model_name = getattr(config, 'translation_openrouter_model_name', None) or "google/gemini-2.5-flash"
+    model_name = getattr(config, 'translation_openrouter_model_name', None) or "google/gemini-3.5-flash"
     custom_prompt = getattr(config, 'translation_openrouter_prompt', None) or ""
 
     src_lang_code = config.translation_src_lang_code
     if not src_lang_code or src_lang_code == 'auto':
         src_lang_code = config.src_lang_code
         if src_lang_code == 'auto':
-            src_lang_code = whisper_info.language
+            src_lang_code = whisper_info.language or 'en'
 
     lang_map = {
         "en": "angielski", "pl": "polski", "de": "niemiecki", "fr": "francuski", "es": "hiszpański",
@@ -785,7 +745,7 @@ def translate_helsinki(config, original_text, original_segments, whisper_info, s
     # Określenie języka źródłowego
     src_lang_code = config.translation_src_lang_code
     if not src_lang_code or src_lang_code == 'auto':
-        src_lang_code = whisper_info.language
+        src_lang_code = whisper_info.language or 'en'
 
     # Mapowanie na modele Helsinki-NLP dla tłumaczenia na polski
     helsinki_model_mapping = {

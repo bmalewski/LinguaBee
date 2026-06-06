@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from huggingface_hub import login, HfFolder
+from huggingface_hub import login
 
 
 def get_hf_token() -> str | None:

@@ -166,4 +166,3 @@ def forced_align_refined_text(refined_text: str, audio_path: str, segments: List
             except Exception:
                 pass
         return segments
-*** End Patch

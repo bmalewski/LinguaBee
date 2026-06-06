@@ -66,20 +66,30 @@ def diarize_audio(audio_path: str, config, status_signal, progress_signal):
             del diarization_pipeline_cache[pipeline_key]
         return []
 
+import bisect
+
 def assign_speakers_to_words(diarization_timeline: list, whisper_segments: list):
     """
     Assigns a speaker to each word in the Whisper segments based on the diarization timeline.
+    Uses bisect for O(log n) lookup instead of a linear scan per word.
     """
+    if not diarization_timeline:
+        return whisper_segments
+
+    # Build sorted arrays of interval start/end times for fast binary search.
+    starts = [t['start'] for t in diarization_timeline]
+    ends = [t['end'] for t in diarization_timeline]
+
     for segment in whisper_segments:
         if 'words' not in segment or not segment['words']:
             continue
         for word in segment['words']:
             word_center = (word.get('start', 0.0) + word.get('end', 0.0)) / 2
             best_speaker = 'UNKNOWN'
-            for turn in diarization_timeline:
-                if turn['start'] <= word_center < turn['end']:
-                    best_speaker = turn['speaker']
-                    break
+            # Find the rightmost interval whose start <= word_center
+            idx = bisect.bisect_right(starts, word_center) - 1
+            if idx >= 0 and word_center < ends[idx]:
+                best_speaker = diarization_timeline[idx]['speaker']
             word['speaker'] = best_speaker
     return whisper_segments
 

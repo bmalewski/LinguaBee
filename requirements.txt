@@ -34,3 +34,16 @@ huggingface-hub
 
 # Document outputs
 python-docx
+
+# ---------------------------------------------------------------------------
+# Opcjonalne backendy lokalne (zainstaluj ręcznie na docelowej platformie)
+# ---------------------------------------------------------------------------
+
+# Apple Silicon (Mac M1/M2/M3/M4) — MLX backend
+# pip install mlx-lm
+# mlx-lm
+
+# NVIDIA GPU (np. RTX 3090 Ti) — llama-cpp-python z obsługą CUDA
+# WAŻNE: wymagana kompilacja z flagą CUDA, NIE zwykłe pip install
+# CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+# llama-cpp-python

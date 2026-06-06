@@ -137,3 +137,9 @@ class TranscriptionConfig:
     forced_alignment_model: Optional[str] = None
     # Show progress on main progress bar while sending segments to Ollama
     show_ollama_progress: bool = True
+    # MLX (Apple Silicon) model settings
+    mlx_model_id: Optional[str] = None
+    # llama.cpp (NVIDIA GPU) model settings
+    llama_cpp_model_repo: Optional[str] = None
+    llama_cpp_model_file: Optional[str] = None
+    llama_cpp_n_gpu_layers: int = -1

@@ -196,7 +196,7 @@ Oto dane wejściowe:
 
     def summarize(self, text, language):
         if not text.strip():
-            return {{}}
+            return {}
         prompt = self._create_user_prompt_summary(text, language)
         
         original_callback = self.status_callback
@@ -216,11 +216,11 @@ Oto dane wejściowe:
             else:
                 if self.status_callback:
                     self.status_callback(f"Ostrzeżenie: Odpowiedź Ollama dla streszczenia ma nieoczekiwany format. Otrzymano: {response_json}", "warning")
-                return {{}}
+                return {}
         except Exception as e:
             if self.status_callback:
                 self.status_callback(f"Błąd podczas generowania streszczenia w Ollama: {repr(e)}", "error")
-            return {{}}
+            return {}
         finally:
             # Restore original callback
             self.status_callback = original_callback

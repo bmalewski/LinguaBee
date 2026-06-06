@@ -764,7 +764,7 @@ class GeminiCorrectionSettingsDialog(QDialog):
 
 class OpenRouterCorrectionSettingsDialog(QDialog):
     """Ustawienia korekty dla OpenRouter: klucz API + prompt."""
-    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-2.5-flash", current_transcription_segment_batch_size=200):
+    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-3.5-flash", current_transcription_segment_batch_size=200):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Korekty (OpenRouter API)")
         self.layout = QGridLayout(self)
@@ -778,18 +778,18 @@ class OpenRouterCorrectionSettingsDialog(QDialog):
         self.layout.addWidget(QLabel("Model OpenRouter:"), 1, 0)
         self.model_input = QComboBox()
         self.model_input.setEditable(False)
+        self.model_input.addItem("Gemini 3.5 flash", userData="google/gemini-3.5-flash")
         self.model_input.addItem("Gemini 3 flash (preview)", userData="google/gemini-3-flash-preview")
-        self.model_input.addItem("Gemini 2.5 flash", userData="google/gemini-2.5-flash")
         self.model_input.addItem("Gemini 3 pro", userData="google/gemini-3-pro-preview")
         self.model_input.addItem("Gemini 2.5 pro", userData="google/gemini-2.5-pro")
         self.model_input.addItem("GPT-5", userData="openai/gpt-5")
         self.model_input.addItem("GPT-5 mini", userData="openai/gpt-5-mini")
-        model_to_set = current_model or "google/gemini-2.5-flash"
+        model_to_set = current_model or "google/gemini-3.5-flash"
         idx = self.model_input.findData(model_to_set)
         if idx >= 0:
             self.model_input.setCurrentIndex(idx)
         else:
-            self.model_input.setCurrentIndex(1)
+            self.model_input.setCurrentIndex(0)
         self.layout.addWidget(self.model_input, 1, 1, 1, 3)
 
         self.layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"), 2, 0)
@@ -811,13 +811,13 @@ class OpenRouterCorrectionSettingsDialog(QDialog):
         self.layout.addWidget(buttons, 5, 0, 1, 4)
 
     def get_settings(self):
-        model_id = self.model_input.currentData() or "google/gemini-2.5-flash"
+        model_id = self.model_input.currentData() or "google/gemini-3.5-flash"
         return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), str(model_id).strip(), self.transcription_segment_batch_spin.value()
 
 
 class OpenRouterSummarySettingsDialog(QDialog):
     """Ustawienia streszczenia dla OpenRouter: klucz API + model + prompt + szablony (wspólne z Ollama/Gemini)."""
-    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-2.5-flash"):
+    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-3.5-flash"):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Streszczenia (OpenRouter API)")
         self.layout = QGridLayout(self)
@@ -832,18 +832,18 @@ class OpenRouterSummarySettingsDialog(QDialog):
         self.layout.addWidget(QLabel("Model OpenRouter:"), 1, 0)
         self.model_input = QComboBox()
         self.model_input.setEditable(False)
+        self.model_input.addItem("Gemini 3.5 flash", userData="google/gemini-3.5-flash")
         self.model_input.addItem("Gemini 3 flash (preview)", userData="google/gemini-3-flash-preview")
-        self.model_input.addItem("Gemini 2.5 flash", userData="google/gemini-2.5-flash")
         self.model_input.addItem("Gemini 3 pro", userData="google/gemini-3-pro-preview")
         self.model_input.addItem("Gemini 2.5 pro", userData="google/gemini-2.5-pro")
         self.model_input.addItem("GPT-5", userData="openai/gpt-5")
         self.model_input.addItem("GPT-5 mini", userData="openai/gpt-5-mini")
-        model_to_set = current_model or "google/gemini-2.5-flash"
+        model_to_set = current_model or "google/gemini-3.5-flash"
         idx = self.model_input.findData(model_to_set)
         if idx >= 0:
             self.model_input.setCurrentIndex(idx)
         else:
-            self.model_input.setCurrentIndex(1)
+            self.model_input.setCurrentIndex(0)
         self.layout.addWidget(self.model_input, 1, 1, 1, 3)
 
         self.layout.addWidget(QLabel("Szablony promptów:"), 2, 0)
@@ -878,7 +878,7 @@ class OpenRouterSummarySettingsDialog(QDialog):
             self.prompt_edit.setPlainText(original_prompt)
 
     def get_settings(self):
-        model_id = self.model_input.currentData() or "google/gemini-2.5-flash"
+        model_id = self.model_input.currentData() or "google/gemini-3.5-flash"
         return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), str(model_id).strip()
 
     def _list_prompt_files(self):
@@ -973,7 +973,7 @@ class OpenRouterSummarySettingsDialog(QDialog):
 
 class OpenRouterTranslationSettingsDialog(QDialog):
     """Ustawienia tłumaczenia dla OpenRouter: klucz API + model + prompt + szablony."""
-    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-2.5-flash", current_translation_segment_batch_size=250):
+    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-3.5-flash", current_translation_segment_batch_size=250):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Tłumaczenia (OpenRouter API)")
         self.layout = QGridLayout(self)
@@ -988,18 +988,18 @@ class OpenRouterTranslationSettingsDialog(QDialog):
         self.layout.addWidget(QLabel("Model OpenRouter:"), 1, 0)
         self.model_input = QComboBox()
         self.model_input.setEditable(False)
+        self.model_input.addItem("Gemini 3.5 flash", userData="google/gemini-3.5-flash")
         self.model_input.addItem("Gemini 3 flash (preview)", userData="google/gemini-3-flash-preview")
-        self.model_input.addItem("Gemini 2.5 flash", userData="google/gemini-2.5-flash")
         self.model_input.addItem("Gemini 3 pro", userData="google/gemini-3-pro-preview")
         self.model_input.addItem("Gemini 2.5 pro", userData="google/gemini-2.5-pro")
         self.model_input.addItem("GPT-5", userData="openai/gpt-5")
         self.model_input.addItem("GPT-5 mini", userData="openai/gpt-5-mini")
-        model_to_set = current_model or "google/gemini-2.5-flash"
+        model_to_set = current_model or "google/gemini-3.5-flash"
         idx = self.model_input.findData(model_to_set)
         if idx >= 0:
             self.model_input.setCurrentIndex(idx)
         else:
-            self.model_input.setCurrentIndex(1)
+            self.model_input.setCurrentIndex(0)
         self.layout.addWidget(self.model_input, 1, 1, 1, 3)
 
         self.layout.addWidget(QLabel("Szablony promptów:"), 2, 0)
@@ -1042,7 +1042,7 @@ class OpenRouterTranslationSettingsDialog(QDialog):
             self.prompt_edit.setPlainText(original_prompt)
 
     def get_settings(self):
-        model_id = self.model_input.currentData() or "google/gemini-2.5-flash"
+        model_id = self.model_input.currentData() or "google/gemini-3.5-flash"
         return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), str(model_id).strip(), self.translation_segment_batch_spin.value()
 
     def _list_prompt_files(self):

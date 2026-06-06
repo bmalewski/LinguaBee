@@ -172,10 +172,13 @@ class WhisperTranscription:
         if self._is_stopped(): return None, None
 
         try:
+            # beam_size: use 1 (greedy) on CPU for 2-3x speed gain with minimal quality loss;
+            # use 5 on GPU where the cost is negligible.
+            _beam_size = 1 if self.config.whisper_device == "cpu" else 5
             segments_generator, info = model.transcribe(
                 audio_path,
                 language=self.config.src_lang_code if self.config.src_lang_code != "auto" else None,
-                beam_size=5,
+                beam_size=_beam_size,
                 chunk_length=30, # Długość fragmentu audio w sekundach
                 word_timestamps=True,
                 vad_filter=True, # Włączenie filtru VAD znacząco redukuje halucynacje
