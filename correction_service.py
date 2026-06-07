@@ -213,7 +213,9 @@ def _correct_srt_with_batched_provider(
 
         for i, seg in enumerate(chunk):
             if i < len(parsed) and str(parsed[i]).strip():
-                corrected_lines.append(str(parsed[i]).strip())
+                line = str(parsed[i]).strip()
+                line = re.sub(rf"^{i+1}\.\s*", "", line)
+                corrected_lines.append(line)
             else:
                 corrected_lines.append(str(seg.get("text", "")).strip())
 
@@ -325,6 +327,15 @@ def run_correction_step(
                 "\n\nINSTRUKCJA: Zwróć poprawione segmenty w postaci JSON-owej listy stringów, "
                 "np. [\"seg1\", \"seg2\", ...]. Każdy element listy musi odpowiadać "
                 "kolejno segmentowi wejściowemu. NIE dodawaj nic poza czystym JSON-em."
+            )
+        elif ext in {"txt", "docx"}:
+            prompt_for_file += (
+                "\n\nINSTRUKCJA TECHNICZNA: To jest zwykły plik tekstowy (TXT/DOCX). "
+                "NIE dodawaj znaczników czasowych, numerów segmentów, kodów SRT "
+                "ani żadnego formatowania charakterystycznego dla plików .srt. "
+                "Podziel tekst na logiczne akapity oddzielone pustą linią — "
+                "każdy akapit powinien obejmować jedną spójną myśl lub wątek. "
+                "Zwróć wyłącznie poprawiony tekst z akapitami, bez komentarzy i bez markdown."
             )
 
         refined, gemini_rate_limited_until = adapters.correct_file(

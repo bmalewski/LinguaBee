@@ -289,7 +289,9 @@ class CorrectionAdapters:
 
             for i, seg in enumerate(chunk):
                 if i < len(parsed) and str(parsed[i]).strip():
-                    corrected_lines.append(str(parsed[i]).strip())
+                    line = str(parsed[i]).strip()
+                    line = re.sub(rf"^{i+1}\.\s*", "", line)
+                    corrected_lines.append(line)
                 else:
                     corrected_lines.append(str(seg.get("text", "")).strip())
 

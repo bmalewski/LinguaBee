@@ -453,6 +453,12 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
     segment_batch_size = max(1, int(getattr(config, 'translation_segment_batch_size', TRANSLATION_SEGMENT_BATCH_SIZE) or TRANSLATION_SEGMENT_BATCH_SIZE))
     ollama_translator = OllamaTranslator(config.ollama_model_name)
     custom_prompt = getattr(config, 'translation_ollama_prompt', None) or ""
+    txt_custom_prompt = (
+        (custom_prompt + "\n\n" if custom_prompt else "")
+        + "INSTRUKCJA TECHNICZNA: To jest tłumaczenie zwykłego pliku tekstowego (TXT/DOCX). "
+        + "NIE dodawaj znaczników czasowych, numerów segmentów ani formatowania SRT. "
+        + "Zwróć wyłącznie przetłumaczony tekst ciągły."
+    )
     formats_lower = [f.lower() for f in config.formats_translated]
 
     try:
@@ -478,7 +484,7 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
                         original_para_text,
                         src_lang_full,
                         tgt_lang_full,
-                        custom_prompt=custom_prompt,
+                        custom_prompt=txt_custom_prompt,
                     )
 
                     speaker_label = ""
@@ -503,7 +509,7 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
                 for i, chk in enumerate(chunks):
                     if is_stopped(): return None, None
                     translated_chunks.append(
-                        ollama_translator.translate(chk, src_lang_full, tgt_lang_full, custom_prompt=custom_prompt)
+                        ollama_translator.translate(chk, src_lang_full, tgt_lang_full, custom_prompt=txt_custom_prompt)
                     )
                     if total_chunks > 0:
                         progress = ((i + 1) / total_chunks) * 100
@@ -601,6 +607,12 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
 
     translated_text_full, translated_segments_for_srt = None, None
     segment_batch_size = max(1, int(getattr(config, 'translation_segment_batch_size', TRANSLATION_SEGMENT_BATCH_SIZE) or TRANSLATION_SEGMENT_BATCH_SIZE))
+    txt_custom_prompt = (
+        (custom_prompt + "\n\n" if custom_prompt else "")
+        + "INSTRUKCJA TECHNICZNA: To jest tłumaczenie zwykłego pliku tekstowego (TXT/DOCX). "
+        + "NIE dodawaj znaczników czasowych, numerów segmentów ani formatowania SRT. "
+        + "Zwróć wyłącznie przetłumaczony tekst ciągły."
+    )
     formats_lower = [f.lower() for f in config.formats_translated]
 
     try:
@@ -627,7 +639,7 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
                         src_lang_full,
                         tgt_lang_full,
                         original_para_text,
-                        custom_prompt=custom_prompt,
+                        custom_prompt=txt_custom_prompt,
                     )
 
                     speaker_label = ""
@@ -655,7 +667,7 @@ def translate_openrouter(config, original_text, original_segments, whisper_info,
                             src_lang_full,
                             tgt_lang_full,
                             chk,
-                            custom_prompt=custom_prompt,
+                            custom_prompt=txt_custom_prompt,
                         )
                     )
                     if total_chunks > 0:
