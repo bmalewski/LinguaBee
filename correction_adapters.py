@@ -22,18 +22,45 @@ class CorrectionAdapters:
         self.make_ollama_status_cb = make_ollama_status_cb
         self._ollama_refiner = None
 
+    @staticmethod
+    def _has_text_placeholder(prompt: str) -> bool:
+        """Sprawdza, czy prompt zawiera placeholder na tekst do poprawy."""
+        return bool(prompt) and "{text}" in prompt
+
+    @staticmethod
+    def _render_correction_prompt(prompt: str, input_text: str) -> str:
+        """Podstawia placeholder {text} treścią do poprawy, jeśli jest obecny.
+
+        Zwraca renderowany prompt. Jeśli prompt nie zawiera {text}, zwraca go
+        bez zmian (wywołujący sam dołączy tekst osobno).
+        """
+        if not prompt:
+            return ""
+        return prompt.replace("{text}", str(input_text or ""))
+
     def _send_to_gemini(self, api_key: str, prompt: str, input_text: str, model: str = "gemini-2.5-flash") -> str:
         from api_client import call_gemini
-        prompt_text = prompt.strip() + "\n\nTekst do poprawy:\n" + input_text.strip()
+        base = (prompt or "").strip()
+        if self._has_text_placeholder(base):
+            # Prompt sam wskazuje, gdzie umieścić tekst — nie doklejamy go ponownie.
+            prompt_text = self._render_correction_prompt(base, input_text)
+        else:
+            prompt_text = base + "\n\nTekst do poprawy:\n" + str(input_text or "").strip()
         return call_gemini(api_key, model, prompt_text, timeout=90)
 
 
     def _send_to_openrouter(self, api_key: str, prompt: str, input_text: str, model: str = "google/gemini-3.5-flash") -> str:
         from api_client import call_openrouter
-        messages = [
-            {"role": "system", "content": prompt.strip()},
-            {"role": "user", "content": input_text.strip()},
-        ]
+        base = (prompt or "").strip()
+        if self._has_text_placeholder(base):
+            # Tekst jest osadzony w promptcie przez placeholder {text}.
+            system_content = self._render_correction_prompt(base, input_text)
+            messages = [{"role": "user", "content": system_content}]
+        else:
+            messages = [
+                {"role": "system", "content": base},
+                {"role": "user", "content": str(input_text or "").strip()},
+            ]
         return call_openrouter(api_key, model, messages, timeout=90)
 
 
@@ -90,7 +117,7 @@ class CorrectionAdapters:
                 if ext == "srt" and file_segments:
                     parsed_list = self._correct_srt_with_batched_provider(
                         "Gemini",
-                        getattr(self.config, "correction_prompt", ""),
+                        prompt_for_file,
                         file_segments,
                         send_batch=lambda batch_prompt, numbered_text: self._send_to_gemini(
                             gem_key,
@@ -129,7 +156,7 @@ class CorrectionAdapters:
                 if ext == "srt" and file_segments:
                     parsed_list = self._correct_srt_with_batched_provider(
                         "OpenRouter",
-                        getattr(self.config, "correction_prompt", ""),
+                        prompt_for_file,
                         file_segments,
                         send_batch=lambda batch_prompt, numbered_text: self._send_to_openrouter(
                             or_key,
@@ -274,11 +301,14 @@ class CorrectionAdapters:
             for i, seg in enumerate(chunk, start=1):
                 numbered.append(f"{i}. {str(seg.get('text', '')).strip()}")
 
+            # `prompt` (prompt_for_file) zawiera już ogólną instrukcję zwrotu JSON-owej
+            # listy stringów (dodaną w correction_service). Tutaj doklejamy jedynie
+            # informacje specyficzne dla trybu wsadowego (numerowana lista + numer paczki),
+            # aby uniknąć powielania tej samej instrukcji.
             batch_prompt = (
                 prompt.strip()
-                + "\n\nINSTRUKCJA: Otrzymasz numerowaną listę segmentów SRT."
-                + " Zwróć WYŁĄCZNIE JSON-ową listę stringów, bez komentarzy i bez markdown."
-                + " Każdy element listy musi odpowiadać jednemu wejściowemu segmentowi, w tej samej kolejności."
+                + "\n\nINSTRUKCJA WSADOWA: Otrzymasz numerowaną listę segmentów SRT."
+                + " Każdy element wynikowej listy musi odpowiadać jednemu wejściowemu segmentowi, w tej samej kolejności."
                 + f"\nTo jest paczka {idx + 1}/{len(chunks)}."
             )
 

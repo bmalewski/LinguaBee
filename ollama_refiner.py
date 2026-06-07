@@ -44,18 +44,27 @@ class OllamaRefiner:
         if not text or not text.strip():
             return text
 
-        # If a custom prompt is provided by the user, use it. Otherwise use the default editor prompt.
+        # Budujemy SZABLON promptu z markerem {text} w jednolitym miejscu. Dzięki temu
+        # przy chunkingu możemy bezpiecznie podstawiać kolejne fragmenty w miejsce markera,
+        # bez kruchego dopasowywania bloków kodu ani ryzyka zdublowania treści.
         if custom_prompt and isinstance(custom_prompt, str) and custom_prompt.strip():
-            prompt = custom_prompt.strip() + "\n\nTekst do poprawy:\n```\n" + text + "\n```"
+            base = custom_prompt.strip()
+            if "{text}" in base:
+                # Prompt użytkownika sam wskazuje miejsce na tekst.
+                prompt_template = base
+            else:
+                prompt_template = base + "\n\nTekst do poprawy:\n```\n{text}\n```"
         else:
-            prompt = (
+            default_prompt = (
                 "Jesteś doświadczonym redaktorem tekstu. Otrzymasz tekst już podzielony na akapity. "
                 "Zachowaj istniejące akapity jeśli mają sens, popraw interpunkcję, popraw łamanie zdań i usuń ewidentne artefakty transkrypcji. "
                 "Jeśli akapity łamią zdania w połowie, połącz je tak, aby każdy akapit kończył się pełnym zdaniem. "
                 "Nie dodawaj nowych treści ani komentarzy. Zwróć tylko poprawiony tekst."
             )
+            prompt_template = default_prompt + "\n\nTekst do poprawy:\n```\n{text}\n```"
 
-            prompt = prompt + "\n\nTekst do poprawy:\n```\n" + text + "\n```"
+        # Pełny prompt dla całości (gdy nie ma chunkingu).
+        prompt = prompt_template.replace("{text}", text)
 
         try:
             if self.status_callback:
@@ -110,18 +119,11 @@ class OllamaRefiner:
             def try_refine_piece(piece_text, depth=0):
                 """Try to refine a piece. If the first attempt times out and the piece is large, split it immediately.
                 Otherwise perform a small number of retries before falling back."""
-                # If pieces were created from segment groups joined by ' ||| ', preserve the surrounding
-                # wrapper in the prompt but replace the large original block with the smaller piece.
-                prompt_piece = prompt
-                try:
-                    # check for presence of a code fence in the prompt
-                    if "```" in prompt and len(pieces) > 1:
-                        prompt_piece = prompt.replace("```\n" + text + "\n```", "```\n" + piece_text + "\n```")
-                    else:
-                        # fallback: attach piece_text to end of prompt if no code fence
-                        if len(pieces) > 1:
-                            prompt_piece = prompt + "\n\nTekst do poprawy:\n```\n" + piece_text + "\n```"
-                except Exception:
+                # Podstawiamy bieżący fragment w miejsce markera {text} w szablonie promptu.
+                # Dla pojedynczego fragmentu używamy gotowego, pełnego promptu.
+                if len(pieces) > 1:
+                    prompt_piece = prompt_template.replace("{text}", piece_text)
+                else:
                     prompt_piece = prompt
 
                 # First attempt: if it fails quickly (timeout or other), split early for large pieces

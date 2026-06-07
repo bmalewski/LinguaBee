@@ -1,7 +1,9 @@
 import httpx
 import os
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpinBox, QVBoxLayout, QGridLayout, QMessageBox, QDialog, QDialogButtonBox, QHBoxLayout, QGroupBox, QFormLayout, QTextEdit, QInputDialog)
+from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpinBox, QVBoxLayout, QGridLayout, QDialog, QDialogButtonBox, QHBoxLayout, QGroupBox, QFormLayout, QTextEdit)
+
+from gui.prompt_template_mixin import PromptTemplateMixin
 
 # ApiKeyDialog removed: OpenAI/Gemini API key dialogs are no longer used in the GUI per user request.
 
@@ -243,7 +245,9 @@ class NllbSettingsDialog(QDialog):
         device_settings = self.device_combo.currentData()
         return self.variant_combo.currentText(), device_settings, self.translation_segment_batch_spin.value()
 
-class BartSummarizationSettingsDialog(QDialog):
+class BartSummarizationSettingsDialog(PromptTemplateMixin, QDialog):
+    default_prompt_filename = "prompt_bart"
+
     def __init__(self, parent=None, available_devices=None, current_model="mtj/bart-base-polish-summarization", current_device="cpu", current_device_index=0, current_max_length=150, current_min_length=30, current_num_beams=4, current_prompt=""):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Streszczenia (BART)")
@@ -313,89 +317,6 @@ class BartSummarizationSettingsDialog(QDialog):
         self.template_combo.currentTextChanged.connect(self._on_template_selected)
         self._load_templates()
 
-    def _list_prompt_files(self):
-        try:
-            files = [f for f in os.listdir(self.prompts_dir) if os.path.isfile(os.path.join(self.prompts_dir, f)) and f.lower().endswith('.txt')]
-            files.sort()
-            return files
-        except Exception:
-            return []
-
-    def _load_templates(self):
-        current_prompt = self.prompt_edit.toPlainText().strip()
-        self.template_combo.blockSignals(True)
-        self.template_combo.clear()
-        files = self._list_prompt_files()
-        for fn in files:
-            self.template_combo.addItem(os.path.splitext(fn)[0])
-        self.template_combo.blockSignals(False)
-
-        # Select matching template name (without loading/overwriting prompt).
-        if current_prompt:
-            for fn in files:
-                name = os.path.splitext(fn)[0]
-                fp = os.path.join(self.prompts_dir, fn)
-                try:
-                    with open(fp, 'r', encoding='utf-8') as fh:
-                        if fh.read().strip() == current_prompt:
-                            self.template_combo.blockSignals(True)
-                            self.template_combo.setCurrentText(name)
-                            self.template_combo.blockSignals(False)
-                            break
-                except Exception:
-                    continue
-
-    def _on_template_selected(self, name: str):
-        if not name:
-            return
-        filename = os.path.join(self.prompts_dir, f"{name}.txt")
-        try:
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as fh:
-                    self.prompt_edit.setPlainText(fh.read())
-        except Exception:
-            pass
-
-    def _sanitize_filename(self, name: str) -> str:
-        import re
-        s = name.strip().replace(' ', '_')
-        s = re.sub(r'[^A-Za-z0-9_\-]', '', s)
-        return s or 'prompt_bart'
-
-    def _save_template(self):
-        prompt_text = self.prompt_edit.toPlainText().strip()
-        if not prompt_text or len(prompt_text) < 20:
-            QMessageBox.warning(self, "Za krótki prompt", "Prompt musi mieć co najmniej 20 znaków.")
-            return
-        name, ok = QInputDialog.getText(self, "Nazwa szablonu", "Podaj nazwę szablonu:")
-        if not ok or not name.strip():
-            return
-        safe = self._sanitize_filename(name)
-        try:
-            with open(os.path.join(self.prompts_dir, f"{safe}.txt"), 'w', encoding='utf-8') as fh:
-                fh.write(prompt_text)
-            self._load_templates()
-            self.template_combo.setCurrentText(safe)
-            QMessageBox.information(self, "Zapisano", f"Zapisano szablon '{safe}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się zapisać szablonu: {e}")
-
-    def _delete_template(self):
-        name = self.template_combo.currentText()
-        if not name:
-            return
-        ok = QMessageBox.question(self, "Usuń szablon", f"Czy na pewno chcesz usunąć szablon '{name}'?")
-        if ok != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            fp = os.path.join(self.prompts_dir, f"{name}.txt")
-            if os.path.exists(fp):
-                os.remove(fp)
-            self._load_templates()
-            QMessageBox.information(self, "Usunięto", f"Usunięto szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się usunąć szablonu: {e}")
-
     def get_settings(self):
         device_settings = self.device_combo.currentData() or {'device': 'cpu', 'device_index': 0}
         return {
@@ -449,7 +370,7 @@ class OllamaSettingsDialog(QDialog):
 
         self.populate_models(current_model)
 
-class CorrectionSettingsDialog(QDialog):
+class CorrectionSettingsDialog(PromptTemplateMixin, QDialog):
     """Dialog do konfiguracji opcji Korekta (Ollama + prompt).
 
     Templates are persisted as individual text files under a `prompts/` directory
@@ -591,99 +512,6 @@ class CorrectionSettingsDialog(QDialog):
         prompt = self.prompt_edit.toPlainText().strip()
         return model, prompt
 
-    def _list_prompt_files(self):
-        try:
-            files = [f for f in os.listdir(self.prompts_dir) if os.path.isfile(os.path.join(self.prompts_dir, f)) and f.lower().endswith('.txt')]
-            files.sort()
-            return files
-        except Exception:
-            return []
-
-    def _load_templates(self):
-        current_prompt = self.prompt_edit.toPlainText().strip()
-        self.template_combo.blockSignals(True)
-        self.template_combo.clear()
-        files = self._list_prompt_files()
-        self.template_names = []
-        for fn in files:
-            name = os.path.splitext(fn)[0]
-            self.template_combo.addItem(name)
-            self.template_names.append(name)
-        self.template_combo.blockSignals(False)
-
-        # Select matching template name (without loading/overwriting prompt).
-        if current_prompt:
-            for fn in files:
-                name = os.path.splitext(fn)[0]
-                fp = os.path.join(self.prompts_dir, fn)
-                try:
-                    with open(fp, 'r', encoding='utf-8') as fh:
-                        if fh.read().strip() == current_prompt:
-                            self.template_combo.blockSignals(True)
-                            self.template_combo.setCurrentText(name)
-                            self.template_combo.blockSignals(False)
-                            break
-                except Exception:
-                    continue
-
-    def _on_template_selected(self, name: str):
-        if not name:
-            return
-        filename = os.path.join(self.prompts_dir, f"{name}.txt")
-        try:
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as fh:
-                    self.prompt_edit.setPlainText(fh.read())
-        except Exception:
-            pass
-
-    def _sanitize_filename(self, name: str) -> str:
-        import re
-        s = name.strip().replace(' ', '_')
-        s = re.sub(r'[^A-Za-z0-9_\-]', '', s)
-        if not s:
-            s = 'prompt'
-        return s
-
-    def _save_template(self):
-        prompt_text = self.prompt_edit.toPlainText().strip()
-        if not prompt_text or len(prompt_text) < 20:
-            QMessageBox.warning(self, "Za krótki prompt", "Prompt musi mieć co najmniej 20 znaków.")
-            return
-        name, ok = QInputDialog.getText(self, "Nazwa szablonu", "Podaj nazwę szablonu:")
-        if not ok or not name.strip():
-            return
-        name = name.strip()
-        try:
-            safe = self._sanitize_filename(name)
-            filename = os.path.join(self.prompts_dir, f"{safe}.txt")
-            with open(filename, 'w', encoding='utf-8') as fh:
-                fh.write(prompt_text)
-            self._load_templates()
-            try:
-                self.template_combo.setCurrentText(name)
-            except Exception:
-                self.template_combo.setCurrentText(safe)
-            QMessageBox.information(self, "Zapisano", f"Zapisano szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się zapisać szablonu: {e}")
-
-    def _delete_template(self):
-        name = self.template_combo.currentText()
-        if not name:
-            return
-        ok = QMessageBox.question(self, "Usuń szablon", f"Czy na pewno chcesz usunąć szablon '{name}'?")
-        if ok != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            filename = os.path.join(self.prompts_dir, f"{name}.txt")
-            if os.path.exists(filename):
-                os.remove(filename)
-            self._load_templates()
-            QMessageBox.information(self, "Usunięto", f"Usunięto szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się usunąć szablonu: {e}")
-
 
 class OllamaSummarySettingsDialog(CorrectionSettingsDialog):
     """Dialog ustawień streszczeń Ollama: model + prompt + szablony (bez pól Gemini)."""
@@ -815,7 +643,7 @@ class OpenRouterCorrectionSettingsDialog(QDialog):
         return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), str(model_id).strip(), self.transcription_segment_batch_spin.value()
 
 
-class OpenRouterSummarySettingsDialog(QDialog):
+class OpenRouterSummarySettingsDialog(PromptTemplateMixin, QDialog):
     """Ustawienia streszczenia dla OpenRouter: klucz API + model + prompt + szablony (wspólne z Ollama/Gemini)."""
     def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-3.5-flash"):
         super().__init__(parent)
@@ -881,97 +709,8 @@ class OpenRouterSummarySettingsDialog(QDialog):
         model_id = self.model_input.currentData() or "google/gemini-3.5-flash"
         return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), str(model_id).strip()
 
-    def _list_prompt_files(self):
-        try:
-            files = [f for f in os.listdir(self.prompts_dir) if os.path.isfile(os.path.join(self.prompts_dir, f)) and f.lower().endswith('.txt')]
-            files.sort()
-            return files
-        except Exception:
-            return []
 
-    def _load_templates(self):
-        current_prompt = self.prompt_edit.toPlainText().strip()
-        self.template_combo.blockSignals(True)
-        self.template_combo.clear()
-        files = self._list_prompt_files()
-        for fn in files:
-            self.template_combo.addItem(os.path.splitext(fn)[0])
-        self.template_combo.blockSignals(False)
-
-        if current_prompt:
-            for fn in files:
-                name = os.path.splitext(fn)[0]
-                fp = os.path.join(self.prompts_dir, fn)
-                try:
-                    with open(fp, 'r', encoding='utf-8') as fh:
-                        if fh.read().strip() == current_prompt:
-                            self.template_combo.blockSignals(True)
-                            self.template_combo.setCurrentText(name)
-                            self.template_combo.blockSignals(False)
-                            break
-                except Exception:
-                    continue
-
-    def _on_template_selected(self, name: str):
-        if not name:
-            return
-        filename = os.path.join(self.prompts_dir, f"{name}.txt")
-        try:
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as fh:
-                    self.prompt_edit.setPlainText(fh.read())
-        except Exception:
-            pass
-
-    def _sanitize_filename(self, name: str) -> str:
-        import re
-        s = name.strip().replace(' ', '_')
-        s = re.sub(r'[^A-Za-z0-9_\-]', '', s)
-        if not s:
-            s = 'prompt'
-        return s
-
-    def _save_template(self):
-        prompt_text = self.prompt_edit.toPlainText().strip()
-        if not prompt_text or len(prompt_text) < 20:
-            QMessageBox.warning(self, "Za krótki prompt", "Prompt musi mieć co najmniej 20 znaków.")
-            return
-        name, ok = QInputDialog.getText(self, "Nazwa szablonu", "Podaj nazwę szablonu:")
-        if not ok or not name.strip():
-            return
-        name = name.strip()
-        try:
-            safe = self._sanitize_filename(name)
-            filename = os.path.join(self.prompts_dir, f"{safe}.txt")
-            with open(filename, 'w', encoding='utf-8') as fh:
-                fh.write(prompt_text)
-            self._load_templates()
-            try:
-                self.template_combo.setCurrentText(name)
-            except Exception:
-                self.template_combo.setCurrentText(safe)
-            QMessageBox.information(self, "Zapisano", f"Zapisano szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się zapisać szablonu: {e}")
-
-    def _delete_template(self):
-        name = self.template_combo.currentText()
-        if not name:
-            return
-        ok = QMessageBox.question(self, "Usuń szablon", f"Czy na pewno chcesz usunąć szablon '{name}'?")
-        if ok != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            filename = os.path.join(self.prompts_dir, f"{name}.txt")
-            if os.path.exists(filename):
-                os.remove(filename)
-            self._load_templates()
-            QMessageBox.information(self, "Usunięto", f"Usunięto szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się usunąć szablonu: {e}")
-
-
-class OpenRouterTranslationSettingsDialog(QDialog):
+class OpenRouterTranslationSettingsDialog(PromptTemplateMixin, QDialog):
     """Ustawienia tłumaczenia dla OpenRouter: klucz API + model + prompt + szablony."""
     def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-3.5-flash", current_translation_segment_batch_size=250):
         super().__init__(parent)
@@ -1045,97 +784,8 @@ class OpenRouterTranslationSettingsDialog(QDialog):
         model_id = self.model_input.currentData() or "google/gemini-3.5-flash"
         return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), str(model_id).strip(), self.translation_segment_batch_spin.value()
 
-    def _list_prompt_files(self):
-        try:
-            files = [f for f in os.listdir(self.prompts_dir) if os.path.isfile(os.path.join(self.prompts_dir, f)) and f.lower().endswith('.txt')]
-            files.sort()
-            return files
-        except Exception:
-            return []
 
-    def _load_templates(self):
-        current_prompt = self.prompt_edit.toPlainText().strip()
-        self.template_combo.blockSignals(True)
-        self.template_combo.clear()
-        files = self._list_prompt_files()
-        for fn in files:
-            self.template_combo.addItem(os.path.splitext(fn)[0])
-        self.template_combo.blockSignals(False)
-
-        if current_prompt:
-            for fn in files:
-                name = os.path.splitext(fn)[0]
-                fp = os.path.join(self.prompts_dir, fn)
-                try:
-                    with open(fp, 'r', encoding='utf-8') as fh:
-                        if fh.read().strip() == current_prompt:
-                            self.template_combo.blockSignals(True)
-                            self.template_combo.setCurrentText(name)
-                            self.template_combo.blockSignals(False)
-                            break
-                except Exception:
-                    continue
-
-    def _on_template_selected(self, name: str):
-        if not name:
-            return
-        filename = os.path.join(self.prompts_dir, f"{name}.txt")
-        try:
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as fh:
-                    self.prompt_edit.setPlainText(fh.read())
-        except Exception:
-            pass
-
-    def _sanitize_filename(self, name: str) -> str:
-        import re
-        s = name.strip().replace(' ', '_')
-        s = re.sub(r'[^A-Za-z0-9_\-]', '', s)
-        if not s:
-            s = 'prompt'
-        return s
-
-    def _save_template(self):
-        prompt_text = self.prompt_edit.toPlainText().strip()
-        if not prompt_text or len(prompt_text) < 20:
-            QMessageBox.warning(self, "Za krótki prompt", "Prompt musi mieć co najmniej 20 znaków.")
-            return
-        name, ok = QInputDialog.getText(self, "Nazwa szablonu", "Podaj nazwę szablonu:")
-        if not ok or not name.strip():
-            return
-        name = name.strip()
-        try:
-            safe = self._sanitize_filename(name)
-            filename = os.path.join(self.prompts_dir, f"{safe}.txt")
-            with open(filename, 'w', encoding='utf-8') as fh:
-                fh.write(prompt_text)
-            self._load_templates()
-            try:
-                self.template_combo.setCurrentText(name)
-            except Exception:
-                self.template_combo.setCurrentText(safe)
-            QMessageBox.information(self, "Zapisano", f"Zapisano szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się zapisać szablonu: {e}")
-
-    def _delete_template(self):
-        name = self.template_combo.currentText()
-        if not name:
-            return
-        ok = QMessageBox.question(self, "Usuń szablon", f"Czy na pewno chcesz usunąć szablon '{name}'?")
-        if ok != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            filename = os.path.join(self.prompts_dir, f"{name}.txt")
-            if os.path.exists(filename):
-                os.remove(filename)
-            self._load_templates()
-            QMessageBox.information(self, "Usunięto", f"Usunięto szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się usunąć szablonu: {e}")
-
-
-class GeminiSummarySettingsDialog(QDialog):
+class GeminiSummarySettingsDialog(PromptTemplateMixin, QDialog):
     """Ustawienia streszczenia dla Gemini: klucz API + prompt + szablony (wspólne z Ollama)."""
     def __init__(self, parent=None, current_key="", current_prompt=""):
         super().__init__(parent)
@@ -1184,96 +834,6 @@ class GeminiSummarySettingsDialog(QDialog):
 
     def get_settings(self):
         return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip()
-
-    def _list_prompt_files(self):
-        try:
-            files = [f for f in os.listdir(self.prompts_dir) if os.path.isfile(os.path.join(self.prompts_dir, f)) and f.lower().endswith('.txt')]
-            files.sort()
-            return files
-        except Exception:
-            return []
-
-    def _load_templates(self):
-        current_prompt = self.prompt_edit.toPlainText().strip()
-        self.template_combo.blockSignals(True)
-        self.template_combo.clear()
-        files = self._list_prompt_files()
-        for fn in files:
-            self.template_combo.addItem(os.path.splitext(fn)[0])
-        self.template_combo.blockSignals(False)
-
-        # Select matching template name (without loading/overwriting prompt).
-        if current_prompt:
-            for fn in files:
-                name = os.path.splitext(fn)[0]
-                fp = os.path.join(self.prompts_dir, fn)
-                try:
-                    with open(fp, 'r', encoding='utf-8') as fh:
-                        if fh.read().strip() == current_prompt:
-                            self.template_combo.blockSignals(True)
-                            self.template_combo.setCurrentText(name)
-                            self.template_combo.blockSignals(False)
-                            break
-                except Exception:
-                    continue
-
-    def _on_template_selected(self, name: str):
-        if not name:
-            return
-        filename = os.path.join(self.prompts_dir, f"{name}.txt")
-        try:
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as fh:
-                    self.prompt_edit.setPlainText(fh.read())
-        except Exception:
-            pass
-
-    def _sanitize_filename(self, name: str) -> str:
-        import re
-        s = name.strip().replace(' ', '_')
-        s = re.sub(r'[^A-Za-z0-9_\-]', '', s)
-        if not s:
-            s = 'prompt'
-        return s
-
-    def _save_template(self):
-        prompt_text = self.prompt_edit.toPlainText().strip()
-        if not prompt_text or len(prompt_text) < 20:
-            QMessageBox.warning(self, "Za krótki prompt", "Prompt musi mieć co najmniej 20 znaków.")
-            return
-        name, ok = QInputDialog.getText(self, "Nazwa szablonu", "Podaj nazwę szablonu:")
-        if not ok or not name.strip():
-            return
-        name = name.strip()
-        try:
-            safe = self._sanitize_filename(name)
-            filename = os.path.join(self.prompts_dir, f"{safe}.txt")
-            with open(filename, 'w', encoding='utf-8') as fh:
-                fh.write(prompt_text)
-            self._load_templates()
-            try:
-                self.template_combo.setCurrentText(name)
-            except Exception:
-                self.template_combo.setCurrentText(safe)
-            QMessageBox.information(self, "Zapisano", f"Zapisano szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się zapisać szablonu: {e}")
-
-    def _delete_template(self):
-        name = self.template_combo.currentText()
-        if not name:
-            return
-        ok = QMessageBox.question(self, "Usuń szablon", f"Czy na pewno chcesz usunąć szablon '{name}'?")
-        if ok != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            filename = os.path.join(self.prompts_dir, f"{name}.txt")
-            if os.path.exists(filename):
-                os.remove(filename)
-            self._load_templates()
-            QMessageBox.information(self, "Usunięto", f"Usunięto szablon '{name}'.")
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się usunąć szablonu: {e}")
 
 
 class DiarizationDialog(QDialog):
