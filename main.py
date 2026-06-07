@@ -131,6 +131,8 @@ def _load_custom_fonts(app: QApplication):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     _apply_readable_font(app)
+    # Wczytaj opcjonalne czcionki projektu (np. SF Pro), jeśli katalog font/ istnieje.
+    _load_custom_fonts(app)
     # Zastosuj arkusz stylów projektu, aby kolory/czcionki pasowały do projektu interfejsu użytkownika
     _load_stylesheet(app)
     window = MainWindow()

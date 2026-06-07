@@ -1,6 +1,6 @@
 [Setup]
 AppName=LinguaBee
-AppVersion=0.9.8b
+AppVersion=0.9.9
 AppPublisher=Benedykt Malewski
 DefaultDirName={autopf}\LinguaBee
 DefaultGroupName=LinguaBee

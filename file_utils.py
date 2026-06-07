@@ -56,7 +56,13 @@ def _split_text_for_srt(text: str, max_chars_per_line: int, max_lines: int):
 
 
 def save_srt(segments, path, max_lines=None, max_chars_per_line=None):
-    """Saves transcription segments to an SRT subtitle file."""
+    """Saves transcription segments to an SRT subtitle file.
+
+    Respektuje zarówno `max_chars_per_line` (zawijanie tekstu), jak i `max_lines`
+    (maksymalna liczba linii na napis). Jeśli zawinięty tekst przekracza
+    `max_lines`, segment jest dzielony na kolejne napisy (cue) z proporcjonalnym
+    podziałem czasu trwania.
+    """
     if not segments:
         return
 
@@ -65,30 +71,35 @@ def save_srt(segments, path, max_lines=None, max_chars_per_line=None):
     except Exception:
         max_chars_per_line = 25
 
+    try:
+        max_lines = int(max_lines) if max_lines is not None else 0
+    except Exception:
+        max_lines = 0
+
     with open(path, "w", encoding="utf-8") as f:
         cue_idx = 1
         for seg in segments:
-            start = format_timestamp(seg.get("start", 0.0))
-            end = format_timestamp(seg.get("end", seg.get("start", 0.0)))
             text = seg.get("text", "").strip()
             if not text:
                 continue
 
-            if max_chars_per_line > 0:
-                wrapped = textwrap.wrap(
-                    text,
-                    width=max_chars_per_line,
-                    break_long_words=False,
-                    break_on_hyphens=False,
-                )
-                formatted_text = "\n".join(wrapped) if wrapped else text
-            else:
-                formatted_text = text
+            seg_start = seg.get("start", 0.0) or 0.0
+            seg_end = seg.get("end", seg_start) or seg_start
 
-            f.write(f"{cue_idx}\n")
-            f.write(f"{start} --> {end}\n")
-            f.write(f"{formatted_text}\n\n")
-            cue_idx += 1
+            blocks = _split_text_for_srt(text, max_chars_per_line, max_lines)
+            if not blocks:
+                continue
+
+            # Proporcjonalny podział czasu segmentu na kolejne bloki/napisy.
+            n_blocks = len(blocks)
+            span = max(0.0, float(seg_end) - float(seg_start))
+            for b_i, block in enumerate(blocks):
+                block_start = float(seg_start) + (span * b_i / n_blocks)
+                block_end = float(seg_start) + (span * (b_i + 1) / n_blocks)
+                f.write(f"{cue_idx}\n")
+                f.write(f"{format_timestamp(block_start)} --> {format_timestamp(block_end)}\n")
+                f.write(f"{block}\n\n")
+                cue_idx += 1
 
 
 def _parse_srt_timestamp(value: str) -> float:

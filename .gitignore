@@ -24,7 +24,10 @@ __pycache__/
 /ollama_diagnostic_response.txt
 
 # --- Narzędzia lokalne (jeśli są tylko pomocnicze i prywatne) ---
-/tools
+# Ignorujemy zawartość /tools, ale zostawiamy możliwość wyjątków poniżej.
+/tools/*
+# Wyjątek: runner przetwarzania audio jest kodem produkcyjnym (uruchamiany przez worker.py)
+!/tools/process_audio_runner.py
 /scripts
 
 # --- Pliki packaging (lokalne) ---

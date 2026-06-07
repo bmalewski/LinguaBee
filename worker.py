@@ -8,16 +8,15 @@ from file_utils import is_video_file, extract_audio_from_video
 from whisper_transcription import WhisperTranscription, release_whisper_model
 from translation_manager import translate
 from summarization_manager import summarize
-from text_utils import format_transcript, add_missing_spaces, redistribute_text_to_segments
+from text_utils import format_transcript, add_missing_spaces
 from ollama_refiner import OllamaRefiner
-from correction_service import run_correction_step
+from correction_service import run_correction_step, _redact_api_key_in_message
 from correction_adapters import CorrectionAdapters
 from artifact_io_service import read_artifact, write_artifact
 from types import SimpleNamespace
 import re
 import time
 from whisper_paragrafizer import paragraphs_to_plaintext
-import httpx
 try:
     from whisper_aligner import forced_align_refined_text
 except (ImportError, ModuleNotFoundError):
@@ -414,29 +413,7 @@ class TranscriptionThread(QThread):
                                         formatted_text = add_missing_spaces(formatted_text)
                                     except Exception:
                                         pass
-                                    # Create a status callback wrapper that also emits progress_signal
-                                    def _make_ollama_status_cb(base_cb, show_progress):
-                                        prog_re = re.compile(r"Refinowanie fragmentu\s*(\d+)/(\d+)")
-                                        def _cb(msg, level="info"):
-                                            try:
-                                                base_cb(msg, level)
-                                            except Exception:
-                                                pass
-                                            if show_progress:
-                                                try:
-                                                    m = prog_re.search(msg)
-                                                    if m:
-                                                        num = int(m.group(1))
-                                                        total = int(m.group(2))
-                                                        pct = int((num / total) * 100)
-                                                        try:
-                                                            self.progress_signal.emit(pct)
-                                                        except Exception:
-                                                            pass
-                                                except Exception:
-                                                    pass
-                                        return _cb
-
+                                    # Reuse the status callback factory defined above in run()
                                     refiner = OllamaRefiner(fmt_ollama_model, status_callback=_make_ollama_status_cb(self.status_signal.emit, True))
                                     try:
                                         try:

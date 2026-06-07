@@ -48,10 +48,11 @@ def chunk_text(text, max_chunk_size=400):
 def add_missing_spaces(text):
     if not text:
         return ""
-    # Regex to find a period, question mark, or exclamation mark followed by a letter or opening parenthesis, without a space in between
-    # Excludes cases like "..." or "1.23"
-    # Also handles cases like "word. (next sentence)"
-    corrected_text = re.sub(r'([.!?])([A-Za-z(])', r'\1 \2', text)
+    # Wstaw spację po kropce/znaku zapytania/wykrzykniku, jeśli zaraz po nim występuje
+    # litera lub otwierający nawias bez spacji. Używamy klas Unicode (\w, ze świadomością
+    # liter spoza ASCII), aby poprawnie obsługiwać języki z polskimi/akcentowanymi znakami
+    # (np. "koniec.Ąby" -> "koniec. Ąby"). Wykluczamy cyfry, by nie psuć liczb typu "1.23".
+    corrected_text = re.sub(r'([.!?])([^\W\d_]|\()', r'\1 \2', text, flags=re.UNICODE)
     return corrected_text
 
 

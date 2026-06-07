@@ -113,6 +113,8 @@ class TranscriptionConfig:
     enable_denoising: bool = False
     enable_normalization: bool = False
     force_mono: bool = False
+    # Limit czasu (w sekundach) na izolowany proces przetwarzania audio
+    audio_processing_timeout: int = 300
     # SRT line formatting options for transcription output
     srt_max_lines: int = 2
     srt_max_chars_per_line: int = 25
@@ -137,6 +139,8 @@ class TranscriptionConfig:
     forced_alignment_model: Optional[str] = None
     # Show progress on main progress bar while sending segments to Ollama
     show_ollama_progress: bool = True
+    # Cooldown (w sekundach) przed wywołaniami Gemini, gdy korekta również korzysta z Gemini
+    gemini_cooldown_seconds: float = 4.0
     # MLX (Apple Silicon) model settings
     mlx_model_id: Optional[str] = None
     # llama.cpp (NVIDIA GPU) model settings
