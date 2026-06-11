@@ -11,7 +11,7 @@ echo "Katalog: $ROOT_DIR"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Nie znaleziono python3 w PATH."
-  echo "Zainstaluj Python 3.11.9: https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg"
+  echo "Zainstaluj Python 3.12.10: https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg"
   exit 1
 fi
 

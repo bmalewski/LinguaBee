@@ -13,14 +13,14 @@ try {
     # 1) Python check
     $pyCmd = $null
     if (Get-Command py -ErrorAction SilentlyContinue) {
-        $pyCmd = "py -3.11"
+        $pyCmd = "py -3.12"
     } elseif (Get-Command python -ErrorAction SilentlyContinue) {
         $pyCmd = "python"
     }
 
     if (-not $pyCmd) {
         Write-Host "Nie znaleziono Pythona w PATH." -ForegroundColor Red
-        Write-Host "Zainstaluj Python 3.11.9: https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" -ForegroundColor Yellow
+        Write-Host "Zainstaluj Python 3.12.10: https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe" -ForegroundColor Yellow
         exit 1
     }
 

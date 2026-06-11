@@ -14,7 +14,7 @@ Poniżej znajdziesz **kompletną instrukcję instalacji na Windows i macOS**.
 ## 1) Wymagania wstępne
 
 ### Obowiązkowe
-- Python **3.11.9**
+- Python **3.12.10**
 - Git
 
 ### Bardzo zalecane
@@ -30,10 +30,10 @@ Poniżej znajdziesz **kompletną instrukcję instalacji na Windows i macOS**.
 
 ## 2) Linki do pobrania
 
-### Python 3.11.9
-- Strona wydań Pythona 3.11.9: https://www.python.org/downloads/release/python-3119/
-- Windows 64-bit (installer): https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
-- macOS universal2 (installer): https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg
+### Python 3.12.10
+- Strona wydań Pythona 3.12.10: https://www.python.org/downloads/release/python-31210/
+- Windows 64-bit (installer): https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe
+- macOS universal2 (installer): https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg
 
 ### Git
 - Strona Git: https://git-scm.com/downloads
@@ -66,15 +66,15 @@ Opcjonalnie:
 - pomiń tworzenie venv: `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -SkipVenv`
 - pomiń instalację pakietów: `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -SkipInstall`
 
-### Krok 1: Zainstaluj Python 3.11.9
-1. Pobierz instalator: https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
+### Krok 1: Zainstaluj Python 3.12.10
+1. Pobierz instalator: https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe
 2. Uruchom instalator.
 3. **Koniecznie zaznacz** opcję `Add Python to PATH`.
 4. Kliknij `Install Now`.
 
 Weryfikacja w PowerShell:
 - `python --version`
-- oczekiwane: `Python 3.11.9`
+- oczekiwane: `Python 3.12.10`
 
 ### Krok 2: Zainstaluj Git
 1. Pobierz: https://git-scm.com/download/win
@@ -122,13 +122,13 @@ W Terminalu, w katalogu projektu:
 - `chmod +x ./setup_macos.sh`
 - `./setup_macos.sh`
 
-### Krok 1: Zainstaluj Python 3.11.9
-1. Pobierz installer: https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg
+### Krok 1: Zainstaluj Python 3.12.10
+1. Pobierz installer: https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg
 2. Zainstaluj standardowo.
 
 Weryfikacja w Terminalu:
 - `python3 --version`
-- oczekiwane: `Python 3.11.9`
+- oczekiwane: `Python 3.12.10`
 
 ### Krok 2: Zainstaluj Git
 - Pobierz: https://git-scm.com/download/mac
