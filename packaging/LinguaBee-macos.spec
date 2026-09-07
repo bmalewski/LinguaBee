@@ -14,11 +14,11 @@ from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 ASSETS = os.path.join(ROOT, "build_assets")
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 
 # --- Zasoby tylko do odczytu (config.resource_path) ---
 datas = [
-    (os.path.join(ROOT, "icons", "LinguaBee_1.0_512.png"), "icons"),
+    (os.path.join(ROOT, "icons", "LinguaBee_logo_transparent.png"), "icons"),
     (os.path.join(ROOT, "gui", "stylesheet.qss"), "gui"),
     # Seedy szablonów promptów — kopiowane do Application Support przy pierwszym uruchomieniu.
     (os.path.join(ROOT, "prompts"), "prompts"),

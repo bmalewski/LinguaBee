@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("LinguaBee")
-        self.setWindowIcon(QIcon(os.path.join(icons_dir, "LinguaBee_1.0_512.png")))
+        self.setWindowIcon(QIcon(os.path.join(icons_dir, "LinguaBee_logo_transparent.png")))
 
         self.local_files = []
         # Populate available devices (CPU + CUDA GPUs when available)
@@ -265,8 +265,8 @@ class MainWindow(QMainWindow):
         self.layout = QVBoxLayout(self.centralWidget())
         
         logo_label = QLabel()
-        # Load source pixmap
-        src_pix = QPixmap(os.path.join(icons_dir, 'LinguaBee_1.0_512.png'))
+        # Load source pixmap (wersja z przezroczystym tłem, aby logo zlewało się z tłem GUI)
+        src_pix = QPixmap(os.path.join(icons_dir, 'LinguaBee_logo_transparent.png'))
         # Aim to align the logo height with the visual frame height of the SourceGroup (top/bottom lines)
         # sizeHint may be small before layout; estimate by accounting for groupbox padding and title height
         hint = self.source_group.sizeHint().height()
