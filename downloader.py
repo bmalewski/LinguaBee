@@ -57,7 +57,7 @@ def download_audio(url, progress_signal, status_signal, finished_signal, is_stop
         'progress_hooks': [hook],
         'logger': ytdlp_logger,
         'quiet': True,
-        'no_check_certificate': True,
+        'nocheckcertificate': True,
         'retries': 5,
         'fragment_retries': 5,
         # Prefer modern clients and avoid requiring local JS runtime for basic extraction.

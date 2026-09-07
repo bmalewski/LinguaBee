@@ -36,6 +36,7 @@ class TranscriptionThread(QThread):
         super().__init__()
         self.config = config
         self.audio_path_to_delete = None
+        self._extra_paths_to_delete = []
         self._is_stopped = False
         # Przekazanie globalnych cache do instancji
         global nllb_translator_cache
@@ -160,6 +161,7 @@ class TranscriptionThread(QThread):
                 
                 try:
                     self.audio_path_to_delete = None
+                    self._extra_paths_to_delete = []
                     is_srt_input = False
                     is_text_input = False
                     segments = []
@@ -274,6 +276,9 @@ class TranscriptionThread(QThread):
                                     processed_path = result.get('processed_path', audio_path)
                                     # Jeśli runner zwrócił nową ścieżkę, użyj jej
                                     if processed_path and processed_path != audio_path:
+                                        # Pobrany/wyekstrahowany plik też ma zostać usunięty (jeśli delete_audio).
+                                        if self.audio_path_to_delete:
+                                            self._extra_paths_to_delete.append(self.audio_path_to_delete)
                                         self.audio_path_to_delete = processed_path
                                         audio_path = processed_path
                                         self.status_signal.emit(f"Przetwarzanie audio (subprocess) zakończone: {processed_path}", "info")
@@ -503,6 +508,12 @@ class TranscriptionThread(QThread):
                                 "error"
                             )
 
+                    if text and not self.config.formats_original and str(getattr(self.config, 'transcription_correction', 'Brak') or 'Brak') != 'Brak':
+                        self.status_signal.emit(
+                            "Korekta pominięta: działa na zapisanych plikach oryginalnych, więc wymaga zaznaczenia co najmniej jednego formatu (TXT/DOCX/SRT).",
+                            "warning"
+                        )
+
                     if self.config.translation_model != "Brak":
                         release_whisper_model()
                         if self._is_stopped: break
@@ -536,7 +547,14 @@ class TranscriptionThread(QThread):
                                 elif ext == "docx":
                                     write_artifact(text=translated_text, segments=None, path=path, ext=ext)
                             elif ext == "srt" and translated_segments is not None:
-                                write_artifact(text="", segments=translated_segments, path=path, ext=ext)
+                                write_artifact(
+                                    text="",
+                                    segments=translated_segments,
+                                    path=path,
+                                    ext=ext,
+                                    srt_max_lines=getattr(self.config, 'srt_max_lines', 2),
+                                    srt_max_chars_per_line=getattr(self.config, 'srt_max_chars_per_line', 25),
+                                )
 
                     if self._is_stopped: break
 
@@ -593,12 +611,16 @@ class TranscriptionThread(QThread):
                     )
                     continue
                 finally:
-                    if self.audio_path_to_delete and os.path.exists(self.audio_path_to_delete):
-                        if self.config.delete_audio:
-                            os.remove(self.audio_path_to_delete)
-                            self.status_signal.emit(f"Usunięto pobrany plik audio: {self.audio_path_to_delete}", "info")
-                        else:
-                            self.status_signal.emit(f"Pobrany plik audio pozostaje w: {self.audio_path_to_delete}", "info")
+                    for cleanup_path in [self.audio_path_to_delete] + list(self._extra_paths_to_delete):
+                        if cleanup_path and os.path.exists(cleanup_path):
+                            if self.config.delete_audio:
+                                try:
+                                    os.remove(cleanup_path)
+                                    self.status_signal.emit(f"Usunięto pobrany plik audio: {cleanup_path}", "info")
+                                except Exception as e:
+                                    self.status_signal.emit(f"Nie udało się usunąć pliku audio {cleanup_path}: {e}", "warning")
+                            else:
+                                self.status_signal.emit(f"Pobrany plik audio pozostaje w: {cleanup_path}", "info")
         finally:
             self.status_signal.emit("Końcowe czyszczenie zasobów...", "info")
             try:

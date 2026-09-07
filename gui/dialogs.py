@@ -370,6 +370,17 @@ class OllamaSettingsDialog(QDialog):
 
         self.populate_models(current_model)
 
+    def populate_models(self, current_model=""):
+        # Ta sama logika co w CorrectionSettingsDialog (klasa zdefiniowana niżej w module;
+        # w chwili wywołania jest już dostępna).
+        return CorrectionSettingsDialog.populate_models(self, current_model)
+
+    def get_settings(self):
+        model = self.model_combo.currentText()
+        if model.startswith("Błąd:") or model == "Brak modeli Ollama":
+            model = ""
+        return model
+
 class CorrectionSettingsDialog(PromptTemplateMixin, QDialog):
     """Dialog do konfiguracji opcji Korekta (Ollama + prompt).
 

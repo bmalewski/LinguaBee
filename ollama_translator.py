@@ -68,9 +68,12 @@ Oto dane wejściowe:
                 "model": self.ollama_model_name,
                 "prompt": prompt_text,
                 "stream": True,
-                "temperature": 0.0,
-                "max_tokens": 2048,
-                "stop": ["<<<END_JSON>>>"]
+                # Parametry generowania muszą być w "options"; na najwyższym poziomie Ollama je ignoruje.
+                "options": {
+                    "temperature": 0.0,
+                    "num_predict": 2048,
+                    "stop": ["<<<END_JSON>>>"],
+                },
             }
 
             full_response = []
@@ -118,7 +121,8 @@ Oto dane wejściowe:
             payload = {
                 "model": self.ollama_model_name,
                 "prompt": prompt_text,
-                "stream": True
+                "stream": True,
+                "options": {"temperature": 0.0},
             }
 
             full_response_str = ""
@@ -193,35 +197,3 @@ Oto dane wejściowe:
             if self.status_callback:
                 self.status_callback(f"Błąd podczas batchowego tłumaczenia w Ollama: {repr(e)}", "error")
             return []
-
-    def summarize(self, text, language):
-        if not text.strip():
-            return {}
-        prompt = self._create_user_prompt_summary(text, language)
-        
-        original_callback = self.status_callback
-        if original_callback:
-            def summary_callback(msg, msg_type):
-                msg = msg.replace("tłumaczenie", "streszczenie").replace("Tłumaczenie", "Streszczenie")
-                original_callback(msg, msg_type)
-            self.status_callback = summary_callback
-
-        try:
-            # We expect a JSON response, so we use the more robust _call_ollama_api_batch method
-            # which is designed to extract JSON from potentially messy model outputs.
-            response_json = self._call_ollama_api_batch(prompt)
-            # Ensure the response has the expected keys
-            if "propozycje" in response_json:
-                return response_json
-            else:
-                if self.status_callback:
-                    self.status_callback(f"Ostrzeżenie: Odpowiedź Ollama dla streszczenia ma nieoczekiwany format. Otrzymano: {response_json}", "warning")
-                return {}
-        except Exception as e:
-            if self.status_callback:
-                self.status_callback(f"Błąd podczas generowania streszczenia w Ollama: {repr(e)}", "error")
-            return {}
-        finally:
-            # Restore original callback
-            self.status_callback = original_callback
-        

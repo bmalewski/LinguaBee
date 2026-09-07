@@ -75,6 +75,8 @@ def call_openrouter(api_key: str, model: str, messages: list, timeout: float = 1
                 if isinstance(txt, str):
                     return txt.strip()
             return ""
+        except RuntimeError:
+            raise
         except Exception as e:
             last_error = e
     if last_error is not None:
@@ -94,17 +96,20 @@ def call_gemini(api_key: str, model: str, prompt_text: str, timeout: float = 120
         normalized_model = normalized_model.split("/", 1)[1]
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}],
-        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 4096},
+        # Bez maxOutputTokens: limit 4096 obcinał długie paczki korekty/streszczeń, a modele
+        # z "thinking" liczą do niego również tokeny rozumowania. Domyślny limit to maksimum modelu.
+        "generationConfig": {"temperature": 0.0},
     }
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{normalized_model}:generateContent"
     last_error = None
     c = _get_gemini_client(timeout)
     for attempt in range(4):
         try:
+            # Klucz w nagłówku, nie w URL: komunikaty błędów httpx zawierają pełny URL.
             r = c.post(
-                endpoint + f"?key={api_key}",
+                endpoint,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
             )
             if r.status_code in (429, 503) and attempt < 3:
                 retry_after = r.headers.get("Retry-After")
@@ -129,10 +134,21 @@ def call_gemini(api_key: str, model: str, prompt_text: str, timeout: float = 120
                     for it in node:
                         _collect(it)
 
-            _collect(j.get("candidates") if isinstance(j, dict) else j)
+            candidates = j.get("candidates") if isinstance(j, dict) else j
+            _collect(candidates)
+            finish_reason = ""
+            try:
+                if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict):
+                    finish_reason = str(candidates[0].get("finishReason") or "")
+            except Exception:
+                finish_reason = ""
+            if finish_reason == "MAX_TOKENS":
+                raise RuntimeError("Gemini: odpowiedź została obcięta (MAX_TOKENS); zmniejsz rozmiar paczki.")
             if text_parts:
                 return "\n".join(text_parts).strip()
             return ""
+        except RuntimeError:
+            raise
         except Exception as e:
             last_error = e
     if last_error is not None:

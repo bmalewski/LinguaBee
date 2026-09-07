@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from huggingface_hub import login
+from huggingface_hub import login, get_token
 
 
 def get_hf_token() -> str | None:
@@ -44,5 +44,11 @@ def login_huggingface():
     """
     token = get_hf_token()
     # Sprawdź, czy już jesteśmy zalogowani, aby uniknąć zbędnych wywołań
-    if token and HfFolder.get_token() != token:
+    if not token:
+        return
+    try:
+        current = get_token()
+    except Exception:
+        current = None
+    if current != token:
         login(token)

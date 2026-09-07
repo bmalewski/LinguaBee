@@ -1,6 +1,9 @@
 from docx import Document
 import os
 import av
+
+# PyAV >= 14 usunęło av.AVError; bazową klasą błędów jest av.error.FFmpegError.
+_AV_ERROR = getattr(av, "AVError", None) or getattr(getattr(av, "error", None), "FFmpegError", Exception)
 import re
 import textwrap
 from config import downloads_dir
@@ -205,7 +208,7 @@ def extract_audio_from_video(video_path, status_signal=None, progress_signal=Non
         
         return output_audio_path
 
-    except av.AVError as e:
+    except _AV_ERROR as e:
         if status_signal:
             status_signal.emit(f"Błąd PyAV podczas ekstrakcji audio: {e}", "error")
         return None

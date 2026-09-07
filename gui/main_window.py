@@ -334,7 +334,6 @@ class MainWindow(QMainWindow):
         top_right_layout.setContentsMargins(0, 0, 0, 0)
         top_right_layout.setSpacing(8)
         top_right_layout.addWidget(logo_label, 0, Qt.AlignCenter)
-        top_right_layout.addWidget(self.preset_group)
         top_right_layout.addStretch(1)
 
         main_grid = QGridLayout()
@@ -574,7 +573,13 @@ class MainWindow(QMainWindow):
                 self.append_log(f"Wybrano {len(paths)} plików: {', '.join([os.path.basename(p) for p in paths])}", "info")
             else:
                 self.append_log(f"Wybrano plik: {os.path.basename(paths[0])}", "info")
-            self.source_group.url_entry.clear()
+            # Czyszczenie pola URL nie może wyzwolić clear_local_files (textChanged),
+            # bo skasowałoby właśnie wybrane pliki.
+            self.source_group.url_entry.blockSignals(True)
+            try:
+                self.source_group.url_entry.clear()
+            finally:
+                self.source_group.url_entry.blockSignals(False)
             # also log file sizes for selected files
             try:
                 total_bytes = 0
@@ -589,12 +594,39 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
+    def _is_worker_running(self) -> bool:
+        thread = getattr(self, 'worker_thread', None)
+        return thread is not None and thread.isRunning()
+
     def stop_transcription(self):
-        if hasattr(self, 'thread') and self.thread.isRunning():
-            self.thread.stop()
-            self.append_log("Próba zatrzymania procesu...", "warning")
-            self.start_btn.setEnabled(True)
+        if self._is_worker_running():
+            self.worker_thread.stop()
+            self.append_log("Próba zatrzymania procesu... Czekam na zakończenie bieżącego kroku.", "warning")
+            # Start zostanie odblokowany dopiero w on_finished, gdy wątek faktycznie się zakończy.
             self.stop_btn.setEnabled(False)
+
+    def closeEvent(self, event):
+        if self._is_worker_running():
+            reply = QMessageBox.question(
+                self,
+                "Zadanie w toku",
+                "Trwa przetwarzanie. Zatrzymać je i zamknąć aplikację?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                event.ignore()
+                return
+            thread = self.worker_thread
+            try:
+                thread.finished_signal.disconnect(self.on_finished)
+            except Exception:
+                pass
+            thread.stop()
+            if not thread.wait(30000):
+                thread.terminate()
+                thread.wait(5000)
+        super().closeEvent(event)
 
     def open_transcription_settings(self, index):
         model = self.transcription_group.model_combo.itemText(index)
@@ -997,12 +1029,17 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             # Apply formats checkboxes
-            for cb in getattr(self.formats_group, 'original_checkboxes', []):
-                cb.setChecked(settings.get('formats_original', []).count(cb.text()) > 0)
-            for cb in getattr(self.formats_group, 'translated_checkboxes', []):
-                cb.setChecked(settings.get('formats_translated', []).count(cb.text()) > 0)
-            for cb in getattr(self.formats_group, 'summary_checkboxes', []):
-                cb.setChecked(settings.get('formats_summary', []).count(cb.text()) > 0)
+            # Przy braku klucza (pierwsze uruchomienie / stary plik ustawień) zostawiamy
+            # domyślne zaznaczenia z widgetu zamiast odznaczać wszystkie formaty.
+            for key, attr in (
+                ('formats_original', 'original_checkboxes'),
+                ('formats_translated', 'translated_checkboxes'),
+                ('formats_summary', 'summary_checkboxes'),
+            ):
+                if key not in settings or not isinstance(settings.get(key), list):
+                    continue
+                for cb in getattr(self.formats_group, attr, []):
+                    cb.setChecked(cb.text() in settings[key])
             try:
                 preset_name = settings.get('pipeline_preset', self.preset_group.preset_combo.currentText())
                 idx = self.preset_group.preset_combo.findText(preset_name)
@@ -1213,6 +1250,9 @@ class MainWindow(QMainWindow):
             pass
 
     def start_transcription(self):
+        if self._is_worker_running():
+            QMessageBox.warning(self, "Zadanie w toku", "Poprzednie zadanie jeszcze się kończy. Poczekaj na jego zakończenie.")
+            return
         url = self.source_group.url_entry.text().strip()
         if not url and not self.local_files:
             QMessageBox.critical(self, "Błąd", "Podaj adres URL lub wybierz plik lokalny.")
@@ -1250,12 +1290,12 @@ class MainWindow(QMainWindow):
         self._clear_preview_results()
         self._set_preview_section("transcription")
 
-        self.thread = TranscriptionThread(config)
-        self.thread.progress_signal.connect(self._on_progress_updated)
-        self.thread.status_signal.connect(self.append_log)
-        self.thread.preview_signal.connect(self._on_worker_preview_result)
-        self.thread.finished_signal.connect(self.on_finished)
-        self.thread.start()
+        self.worker_thread = TranscriptionThread(config)
+        self.worker_thread.progress_signal.connect(self._on_progress_updated)
+        self.worker_thread.status_signal.connect(self.append_log)
+        self.worker_thread.preview_signal.connect(self._on_worker_preview_result)
+        self.worker_thread.finished_signal.connect(self.on_finished)
+        self.worker_thread.start()
 
     def _collect_preflight_issues(self, config, url: str, local_files: list):
         errors = []
@@ -1443,7 +1483,12 @@ class MainWindow(QMainWindow):
         )
 
     def on_finished(self, msg, msg_type):
-        QMessageBox.information(self, "Gotowe", msg) if msg_type == "success" else QMessageBox.critical(self, "Błąd", msg)
+        if msg_type == "success":
+            QMessageBox.information(self, "Gotowe", msg)
+        elif msg_type == "error":
+            QMessageBox.critical(self, "Błąd", msg)
+        else:
+            QMessageBox.information(self, "Informacja", msg)
         self.current_eta = "--:--"
         self.progress_bar.setFormat("%p%")
         self.start_btn.setEnabled(True)

@@ -115,7 +115,15 @@ def _send_to_openrouter_translate_batch(
         return []
 
     numbered = [f"{i + 1}. {str(t or '').strip()}" for i, t in enumerate(segment_texts)]
-    base_prompt = _build_custom_translation_prompt(custom_prompt, src_lang_full, tgt_lang_full, "\n".join(numbered))
+    # Prompt bazowy bez osadzonego tekstu: listę segmentów dokleja dopiero
+    # _send_to_openrouter_translate (wcześniej lista trafiała do promptu dwukrotnie).
+    base_prompt = ""
+    if (custom_prompt or "").strip():
+        base_prompt = _build_custom_translation_prompt(
+            (custom_prompt or "").replace("{text}", ""), src_lang_full, tgt_lang_full, ""
+        ).strip()
+        if base_prompt.endswith("Tekst:"):
+            base_prompt = base_prompt[: -len("Tekst:")].rstrip()
     if not base_prompt:
         base_prompt = (
             f"Przetłumacz z języka {src_lang_full} na język {tgt_lang_full}.\n"
@@ -363,7 +371,7 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
                     progress = ((i + len(batch_chunks)) / total_chunks) * 100
                     progress_signal.emit(int(progress))
             if is_stopped(): return None, None
-            translated_text_full = add_missing_spaces("".join(translated_chunks))
+            translated_text_full = add_missing_spaces(" ".join(translated_chunks))
             progress_signal.emit(100)
 
     if "srt" in formats_lower and original_segments:
@@ -429,7 +437,7 @@ def translate_nllb(config, original_text, original_segments, whisper_info, statu
                 progress = ((i + len(batch_chunks)) / total_chunks) * 100
                 progress_signal.emit(int(progress))
         if is_stopped(): return None, None
-        translated_text_full = add_missing_spaces("".join(translated_chunks))
+        translated_text_full = add_missing_spaces(" ".join(translated_chunks))
         progress_signal.emit(100)
 
     # Ensure alignment with original segments
@@ -440,10 +448,12 @@ def translate_ollama(config, original_text, original_segments, whisper_info, sta
         status_signal.emit("Błąd: Nazwa modelu Ollama nie została podana.", "error")
         return None, None
 
-    # Determine language names for the prompt
-    src_lang_code = config.src_lang_code
-    if src_lang_code == 'auto':
-        src_lang_code = whisper_info.language or 'en'
+    # Determine language names for the prompt (jawny język źródłowy tłumaczenia ma pierwszeństwo)
+    src_lang_code = getattr(config, 'translation_src_lang_code', None)
+    if not src_lang_code or src_lang_code == 'auto':
+        src_lang_code = config.src_lang_code
+        if src_lang_code == 'auto':
+            src_lang_code = (getattr(whisper_info, 'language', None) or 'en')
     
     lang_map = {"en": "angielski", "pl": "polski", "de": "niemiecki", "fr": "francuski", "es": "hiszpański", "it": "włoski", "uk": "ukraiński", "ru": "rosyjski", "ja": "japoński", "ko": "koreański", "la": "łaciński"}
     src_lang_full = lang_map.get(src_lang_code, src_lang_code)

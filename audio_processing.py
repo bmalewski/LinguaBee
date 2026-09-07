@@ -49,8 +49,20 @@ def diarize_audio(audio_path: str, config, status_signal, progress_signal):
         diarization = pipeline(audio_path, num_speakers=num_speakers if num_speakers > 0 else None)
         status_signal.emit("Diaryzacja zakończona.", "info")
         
+        # pyannote.audio 4.x zwraca DiarizeOutput; adnotacja jest w polu speaker_diarization.
+        # Starsze wersje (3.x) zwracają bezpośrednio obiekt Annotation.
+        annotation = diarization
+        if not hasattr(annotation, "itertracks"):
+            for attr in ("speaker_diarization", "exclusive_speaker_diarization"):
+                candidate = getattr(diarization, attr, None)
+                if candidate is not None and hasattr(candidate, "itertracks"):
+                    annotation = candidate
+                    break
+            else:
+                raise TypeError(f"Nieobsługiwany wynik diaryzacji: {type(diarization).__name__}")
+
         timeline = []
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
+        for turn, _, speaker in annotation.itertracks(yield_label=True):
             timeline.append({
                 'start': turn.start,
                 'end': turn.end,

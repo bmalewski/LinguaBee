@@ -89,11 +89,18 @@ class BartSummarizer:
             if not chunks:
                 chunks = [text]
 
+            # Limit wejścia z konfiguracji modelu (BART-base: 1024 pozycji); 2048 powodowało
+            # błąd indeksu w osadzeniach pozycyjnych przy długich wejściach.
+            try:
+                max_input_tokens = int(getattr(self.model.config, "max_position_embeddings", 1024) or 1024)
+            except Exception:
+                max_input_tokens = 1024
+
             partial_summaries = []
             total = len(chunks)
             for i, chk in enumerate(chunks, start=1):
                 prompt_text = self._build_prompt(chk, summary_lang, custom_prompt)
-                inputs = self.tokenizer(prompt_text, return_tensors="pt", max_length=2048, truncation=True).to(self.device)
+                inputs = self.tokenizer(prompt_text, return_tensors="pt", max_length=max_input_tokens, truncation=True).to(self.device)
                 summary_ids = self.model.generate(
                     inputs['input_ids'],
                     num_beams=self.num_beams,
@@ -115,7 +122,7 @@ class BartSummarizer:
             # Final compression pass over partial summaries.
             combined = "\n\n".join(partial_summaries)
             final_prompt = self._build_prompt(combined, summary_lang, custom_prompt)
-            inputs = self.tokenizer(final_prompt, return_tensors="pt", max_length=2048, truncation=True).to(self.device)
+            inputs = self.tokenizer(final_prompt, return_tensors="pt", max_length=max_input_tokens, truncation=True).to(self.device)
             final_ids = self.model.generate(
                 inputs['input_ids'],
                 num_beams=self.num_beams,

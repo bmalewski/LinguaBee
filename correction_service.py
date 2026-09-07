@@ -60,6 +60,7 @@ def run_correction_step(
     except Exception:
         pass
 
+    refined_plain_text = None
     seen_inputs = set()
     unique_inputs = []
     for in_path, ext in correction_inputs:
@@ -114,18 +115,31 @@ def run_correction_step(
 
         out_path = os.path.join(downloads_dir, f"{base_name}_corrected.{ext}")
         try:
-            if ext == "txt":
+            if ext in {"txt", "docx"}:
                 write_artifact(text=refined, segments=None, path=out_path, ext=ext)
-            elif ext == "docx":
-                write_artifact(text=refined, segments=None, path=out_path, ext=ext)
+                # Poprawiony tekst ciągły ma trafić do tłumaczenia i streszczenia.
+                refined_plain_text = refined
             elif ext == "srt":
                 parsed_list = parse_list_response(refined)
                 if parsed_list and file_segments:
+                    if len(parsed_list) != len(file_segments):
+                        status_cb(
+                            f"Korekta SRT: liczba poprawionych segmentów ({len(parsed_list)}) różni się od wejściowej ({len(file_segments)}); "
+                            "brakujące segmenty zachowają oryginalny tekst.",
+                            "warning",
+                        )
                     corr_segments = []
                     for i_seg, seg in enumerate(file_segments):
                         txt_val = str(parsed_list[i_seg]).strip() if i_seg < len(parsed_list) else seg.get("text", "")
                         corr_segments.append({"start": seg.get("start", 0), "end": seg.get("end", 0), "text": txt_val})
-                    write_artifact(text="", segments=corr_segments, path=out_path, ext=ext)
+                    write_artifact(
+                        text="",
+                        segments=corr_segments,
+                        path=out_path,
+                        ext=ext,
+                        srt_max_lines=getattr(config, "srt_max_lines", 2),
+                        srt_max_chars_per_line=getattr(config, "srt_max_chars_per_line", 25),
+                    )
                     segments = corr_segments
                     text = "\n\n".join([s.get("text", "") for s in corr_segments])
                 elif file_segments:
@@ -134,7 +148,14 @@ def run_correction_step(
                     if parsed_lines:
                         sanitized = "\n\n".join(parsed_lines)
                     corr_segments = redistribute_text_to_segments(sanitized, file_segments)
-                    write_artifact(text="", segments=corr_segments, path=out_path, ext=ext)
+                    write_artifact(
+                        text="",
+                        segments=corr_segments,
+                        path=out_path,
+                        ext=ext,
+                        srt_max_lines=getattr(config, "srt_max_lines", 2),
+                        srt_max_chars_per_line=getattr(config, "srt_max_chars_per_line", 25),
+                    )
                     segments = corr_segments
                     text = "\n\n".join([s.get("text", "") for s in corr_segments])
                 else:
@@ -142,5 +163,8 @@ def run_correction_step(
             status_cb(f"Zapisano korektę: {os.path.basename(out_path)}", "success")
         except Exception as e:
             status_cb(f"Nie udało się zapisać korekty ({ext.upper()}): {e}", "warning")
+
+    if refined_plain_text and refined_plain_text.strip():
+        text = refined_plain_text
 
     return text, segments, gemini_rate_limited_until

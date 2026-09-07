@@ -31,7 +31,7 @@ class OllamaSummarizer:
                 "options": {
                     "temperature": 0,
                     "top_p": 0.9,
-                    "num_predict": 1200,
+                    "num_predict": 4096,
                     "repeat_penalty": 1.05
                 }
             }

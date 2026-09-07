@@ -63,16 +63,12 @@ class OllamaRefiner:
             )
             prompt_template = default_prompt + "\n\nTekst do poprawy:\n```\n{text}\n```"
 
-        # Pełny prompt dla całości (gdy nie ma chunkingu).
-        prompt = prompt_template.replace("{text}", text)
-
         try:
             if self.status_callback:
                 self.status_callback("Przygotowuję refinowanie transkryptu (chunking)...", "info")
 
             # Start with a smaller chunk size to reduce per-request generation time
             max_chunk_chars = 2000
-            overlap = 300
 
             # If the input looks like a list of segments joined by a delimiter (e.g. '|||'),
             # prefer chunking by segment boundaries so we don't split segments in half.
@@ -99,16 +95,30 @@ class OllamaRefiner:
                 if cur:
                     pieces.append(' ||| '.join(cur))
             else:
+                # Dzielimy bez nakładania się fragmentów (nakładka była dublowana w wyniku),
+                # a granicę cięcia przesuwamy do końca akapitu lub zdania, jeśli to możliwe.
                 pieces = []
                 start = 0
                 text_len = len(text)
                 while start < text_len:
                     end = min(start + max_chunk_chars, text_len)
+                    if end < text_len:
+                        window_start = start + max_chunk_chars // 2
+                        cut = text.rfind("\n\n", window_start, end)
+                        if cut == -1:
+                            for mark in (". ", "! ", "? ", "\n"):
+                                cut = text.rfind(mark, window_start, end)
+                                if cut != -1:
+                                    cut += len(mark)
+                                    break
+                        else:
+                            cut += 2
+                        if cut > start:
+                            end = cut
                     piece = text[start:end]
-                    pieces.append(piece)
-                    if end >= text_len:
-                        break
-                    start = end - overlap if (end - overlap) > start else end
+                    if piece.strip():
+                        pieces.append(piece)
+                    start = end
 
             refined_pieces = []
             # retry policy
@@ -119,12 +129,9 @@ class OllamaRefiner:
             def try_refine_piece(piece_text, depth=0):
                 """Try to refine a piece. If the first attempt times out and the piece is large, split it immediately.
                 Otherwise perform a small number of retries before falling back."""
-                # Podstawiamy bieżący fragment w miejsce markera {text} w szablonie promptu.
-                # Dla pojedynczego fragmentu używamy gotowego, pełnego promptu.
-                if len(pieces) > 1:
-                    prompt_piece = prompt_template.replace("{text}", piece_text)
-                else:
-                    prompt_piece = prompt
+                # Zawsze podstawiamy bieżący fragment w miejsce markera {text}; użycie pełnego
+                # promptu przy podziale po timeoucie wysyłało cały tekst dla obu połówek.
+                prompt_piece = prompt_template.replace("{text}", piece_text)
 
                 # First attempt: if it fails quickly (timeout or other), split early for large pieces
                 try:

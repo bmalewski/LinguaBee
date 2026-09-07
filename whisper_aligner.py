@@ -60,14 +60,16 @@ def forced_align_refined_text(refined_text: str, audio_path: str, segments: List
 
         # The result contains words with timestamps; perform forced alignment using provided corrected text
         # whisperx provides a forced_alignment function
-        alignment = whisperx.align(result['segments'], asr_model, audio, device)
+        lang_code = (result.get('language') if isinstance(result, dict) else None) or 'en'
+        align_model, align_metadata = whisperx.load_align_model(language_code=lang_code, device=device)
+        alignment = whisperx.align(result['segments'], align_model, align_metadata, audio, device)
 
         # Build new segments by mapping words from refined_text to timestamps in `alignment`.
         # For now, use a conservative approach: split refined_text into words and assign them in order
         # to the aligned words timestamps, then rebuild segments by grouping contiguous words into
         # buckets that approximate original segments durations.
 
-        aligned_words = alignment.get('words', []) if isinstance(alignment, dict) else []
+        aligned_words = alignment.get('word_segments', []) if isinstance(alignment, dict) else []
         if not aligned_words:
             # alignment didn't produce words; fallback
             if status_cb:

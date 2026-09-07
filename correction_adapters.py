@@ -1,3 +1,4 @@
+import json
 import re
 import time
 import httpx
@@ -98,6 +99,20 @@ class CorrectionAdapters:
                         lambda chunk_text, chunk_prompt: self._ollama_refiner.refine(chunk_text, custom_prompt=chunk_prompt),
                         batch_size=200,
                     )
+                elif ext == "srt" and file_segments:
+                    # Wsadowo po segmentach, jak Gemini/OpenRouter. Małe paczki, aby prompt
+                    # zmieścił się w jednym wywołaniu refinera (bez jego wewnętrznego chunkingu).
+                    parsed_list = self._correct_srt_with_batched_provider(
+                        "Ollama",
+                        prompt_for_file,
+                        file_segments,
+                        send_batch=lambda batch_prompt, numbered_text: self._ollama_refiner.refine(
+                            numbered_text, custom_prompt=batch_prompt
+                        ),
+                        batch_size=min(25, int(getattr(self.config, "transcription_segment_batch_size", 200) or 200)),
+                        inter_batch_sleep_s=0.0,
+                    )
+                    refined = json.dumps(parsed_list, ensure_ascii=False) if parsed_list else ""
                 else:
                     refined = self._ollama_refiner.refine(file_text, custom_prompt=prompt_for_file)
 
@@ -128,7 +143,9 @@ class CorrectionAdapters:
                         batch_size=getattr(self.config, "transcription_segment_batch_size", 200),
                         inter_batch_sleep_s=4.0,
                     )
-                    refined = "\n\n".join(parsed_list) if parsed_list else ""
+                    # Zwracamy listę jako JSON, aby correction_service odtworzył ją 1:1
+                    # (łączenie "\n\n" gubiło granice segmentów przy tekstach wieloliniowych).
+                    refined = json.dumps(parsed_list, ensure_ascii=False) if parsed_list else ""
                 elif ext in {"txt", "docx"}:
                     refined = self._correct_text_in_batched_chunks(
                         file_text,
@@ -167,7 +184,9 @@ class CorrectionAdapters:
                         batch_size=getattr(self.config, "transcription_segment_batch_size", 200),
                         inter_batch_sleep_s=2.0,
                     )
-                    refined = "\n\n".join(parsed_list) if parsed_list else ""
+                    # Zwracamy listę jako JSON, aby correction_service odtworzył ją 1:1
+                    # (łączenie "\n\n" gubiło granice segmentów przy tekstach wieloliniowych).
+                    refined = json.dumps(parsed_list, ensure_ascii=False) if parsed_list else ""
                 elif ext in {"txt", "docx"}:
                     refined = self._correct_text_in_batched_chunks(
                         file_text,
@@ -299,7 +318,10 @@ class CorrectionAdapters:
 
             numbered = []
             for i, seg in enumerate(chunk, start=1):
-                numbered.append(f"{i}. {str(seg.get('text', '')).strip()}")
+                # Spłaszczamy łamania linii z pliku SRT (zawijanie do N znaków), aby model
+                # dostał jeden segment w jednej linii i nie rozbijał go na kilka elementów.
+                flat_text = " ".join(str(seg.get("text", "")).split())
+                numbered.append(f"{i}. {flat_text}")
 
             # `prompt` (prompt_for_file) zawiera już ogólną instrukcję zwrotu JSON-owej
             # listy stringów (dodaną w correction_service). Tutaj doklejamy jedynie
@@ -315,7 +337,16 @@ class CorrectionAdapters:
             response = send_batch(batch_prompt, "\n".join(numbered))
             parsed = parse_list_response(response)
             if not parsed:
-                return None
+                try:
+                    if self.status_cb:
+                        self.status_cb(
+                            f"Korekta {provider_name} SRT: paczka {idx + 1}/{len(chunks)} zwróciła nieczytelną odpowiedź; "
+                            "segmenty z tej paczki zachowają oryginalny tekst.",
+                            "warning",
+                        )
+                except Exception:
+                    pass
+                parsed = []
 
             for i, seg in enumerate(chunk):
                 if i < len(parsed) and str(parsed[i]).strip():
@@ -323,7 +354,7 @@ class CorrectionAdapters:
                     line = re.sub(rf"^{i+1}\.\s*", "", line)
                     corrected_lines.append(line)
                 else:
-                    corrected_lines.append(str(seg.get("text", "")).strip())
+                    corrected_lines.append(" ".join(str(seg.get("text", "")).split()))
 
             try:
                 if self.progress_cb:

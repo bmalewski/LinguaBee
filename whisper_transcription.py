@@ -118,7 +118,7 @@ class WhisperTranscription:
         model_key = f"{self.config.whisper_variant}_{self.config.whisper_device}_{self.config.whisper_device_index}"
         if model_key not in whisper_model_cache:
             self.status_signal.emit(f"Ładowanie modelu Whisper '{self.config.whisper_variant}' do '{models_dir}' (może potrwać)...", "info")
-            if self._is_stopped(): return None, None
+            if self._is_stopped(): return None, None, None
             compute_type = "int8" if self.config.whisper_device == "cpu" else "float32"
             # Best-effort login to HF in case model files require authenticated access.
             try:
@@ -169,7 +169,7 @@ class WhisperTranscription:
         model = whisper_model_cache[model_key]
         device_info = f"{self.config.whisper_device}:{self.config.whisper_device_index}" if self.config.whisper_device == 'cuda' else self.config.whisper_device
         self.status_signal.emit(f"Transkrypcja (Whisper, {self.config.whisper_variant}, {device_info})...", "info")
-        if self._is_stopped(): return None, None
+        if self._is_stopped(): return None, None, None
 
         try:
             # beam_size: use 1 (greedy) on CPU for 2-3x speed gain with minimal quality loss;
@@ -193,7 +193,7 @@ class WhisperTranscription:
             self.progress_signal.emit(0)
             
             for s in segments_generator:
-                if self._is_stopped(): return None, None
+                if self._is_stopped(): return None, None, None
                 segment_dict = asdict(s)
                 segments.append(segment_dict)
                 text_list.append(segment_dict["text"])
@@ -311,8 +311,11 @@ class WhisperTranscription:
                                 fw_model = None
                             word_segments = whisperx.align(segments, align_model, metadata, audio, fw_model, wx_device_name)
 
-                    # word_segments should be a list of dicts; replace segments with word-level segments
-                    segments = word_segments or segments
+                    # whisperx.align zwraca dict {"segments": [...], "word_segments": [...]}
+                    if isinstance(word_segments, dict):
+                        word_segments = word_segments.get("segments") or []
+                    if isinstance(word_segments, list) and word_segments:
+                        segments = word_segments
                     self.status_signal.emit("WhisperX alignment zakończony.", "info")
 
                     # Optional diarization merge
