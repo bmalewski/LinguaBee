@@ -7,25 +7,100 @@ import json
 # -------------------------------------------------
 # Paths
 # -------------------------------------------------
-# Determine the base path for the application, which works for both normal execution and when bundled with PyInstaller.
-base_path = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+# Dwa rodzaje ścieżek:
+# - zasoby tylko do odczytu (ikony, stylesheet, seedy promptów, wbudowane binarki):
+#   resource_path(...) — w spakowanej aplikacji (PyInstaller) wskazuje do sys._MEIPASS,
+#   ze źródeł do katalogu projektu;
+# - dane użytkownika (wyniki, modele, ustawienia, szablony promptów):
+#   w spakowanej aplikacji katalogi standardowe systemu (macOS: ~/Documents/LinguaBee
+#   i ~/Library/Application Support/LinguaBee), ze źródeł — jak dotąd obok tego pliku.
+import shutil
 
-# Define the directory where all output files will be saved.
-downloads_dir = os.path.join(base_path, "output")
-
-# Define the directory where icons are stored.
-icons_dir = os.path.join(base_path, "icons")
-
-# Define the directory where all models will be saved.
-models_dir = os.path.join(base_path, "models")
+APP_NAME = "LinguaBee"
+_SOURCE_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
-# Create the output and models directories if they don't already exist.
-os.makedirs(downloads_dir, exist_ok=True)
-os.makedirs(models_dir, exist_ok=True)
+def is_frozen() -> bool:
+    """True, gdy aplikacja działa jako spakowany plik wykonywalny (PyInstaller)."""
+    return bool(getattr(sys, "frozen", False))
 
-# File to persist user settings between sessions
-settings_file = os.path.join(base_path, "user_settings.json")
+
+def resource_path(*parts) -> str:
+    """Ścieżka do zasobu tylko do odczytu dołączonego do aplikacji."""
+    root = getattr(sys, "_MEIPASS", None) if is_frozen() else None
+    return os.path.join(root or _SOURCE_ROOT, *parts)
+
+
+def _user_data_root() -> str:
+    """Katalog zapisu dla modeli, ustawień i szablonów promptów."""
+    if not is_frozen():
+        return _SOURCE_ROOT
+    if sys.platform == "darwin":
+        return os.path.expanduser(f"~/Library/Application Support/{APP_NAME}")
+    if sys.platform.startswith("win"):
+        return os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME)
+    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), APP_NAME)
+
+
+def _user_output_root() -> str:
+    """Katalog, do którego trafiają wyniki (TXT/DOCX/SRT, pobrane audio)."""
+    if not is_frozen():
+        return os.path.join(_SOURCE_ROOT, "output")
+    return os.path.join(os.path.expanduser("~"), "Documents", APP_NAME)
+
+
+def _safe_makedirs(path: str) -> None:
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError:
+        pass
+
+
+# Stałe publiczne — nazwy niezmienione, importowane w wielu modułach.
+base_path = os.path.dirname(sys.executable) if is_frozen() else _SOURCE_ROOT
+data_root = _user_data_root()
+downloads_dir = _user_output_root()
+models_dir = os.path.join(data_root, "models")
+prompts_dir = os.path.join(data_root, "prompts")
+settings_file = os.path.join(data_root, "user_settings.json")
+icons_dir = resource_path("icons")
+bin_dir = resource_path("bin")  # wbudowane ffmpeg/ffprobe (tylko w spakowanej aplikacji)
+
+
+def prompts_subdir(*parts) -> str:
+    """Zapisywalny katalog szablonów promptów (tworzony na żądanie)."""
+    path = os.path.join(prompts_dir, *parts)
+    _safe_makedirs(path)
+    return path
+
+
+def _seed_prompts_if_frozen() -> None:
+    """Pierwsze uruchomienie spakowanej aplikacji: kopiuje dołączone szablony promptów
+    do katalogu użytkownika. Nigdy nie nadpisuje istniejących plików."""
+    if not is_frozen():
+        return
+    src_root = resource_path("prompts")
+    if not os.path.isdir(src_root):
+        return
+    for dirpath, _dirs, files in os.walk(src_root):
+        rel = os.path.relpath(dirpath, src_root)
+        dst_dir = prompts_dir if rel == "." else os.path.join(prompts_dir, rel)
+        _safe_makedirs(dst_dir)
+        for fn in files:
+            if not fn.lower().endswith(".txt"):
+                continue
+            dst = os.path.join(dst_dir, fn)
+            if os.path.exists(dst):
+                continue
+            try:
+                shutil.copyfile(os.path.join(dirpath, fn), dst)
+            except OSError:
+                pass
+
+
+for _d in (downloads_dir, models_dir, prompts_dir):
+    _safe_makedirs(_d)
+_seed_prompts_if_frozen()
 
 
 def load_settings() -> dict:

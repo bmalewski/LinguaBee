@@ -26,12 +26,15 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
+def main(argv=None) -> int:
+    # argv: lista argumentów bez nazwy programu. Gdy None — bierzemy sys.argv[1:].
+    # Wywoływane też w procesie spakowanej aplikacji (main.py --audio-runner).
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if not argv:
         sys.stderr.write("Brak ścieżki audio w argumentach.\n")
         return 2
 
-    audio_path = sys.argv[1]
+    audio_path = argv[0]
     if not audio_path or not os.path.exists(audio_path):
         sys.stderr.write(f"Plik audio nie istnieje: {audio_path}\n")
         return 2

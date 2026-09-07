@@ -198,3 +198,43 @@ W katalogu projektu:
 
 Po aktywacji `.venv`:
 - `python main.py`
+
+---
+
+## 9) Budowanie aplikacji .app na macOS (Apple Silicon)
+
+Zamiast uruchamiać program z terminala, można zbudować zwykłą aplikację macOS
+(`LinguaBee.app`), uruchamianą dwuklikiem. Build jest przeznaczony na własny komputer
+(bez podpisu Apple Developer i notaryzacji), tylko dla Maców z Apple Silicon.
+
+### Wymagania
+- Mac z Apple Silicon (M1 lub nowszy), środowisko `venv/` z Pythonem 3.12 i zainstalowanym `requirements.txt`.
+- Dostęp do sieci przy pierwszym budowaniu: skrypt instaluje `pyinstaller` oraz pobiera
+  statyczne binarki `ffmpeg`/`ffprobe` (arm64, LGPL) z https://ffmpeg.martin-riedl.de/ do `build_assets/bin/`.
+
+### Budowanie
+W katalogu projektu:
+- `packaging/build_macos.sh` — buduje `dist/LinguaBee.app`
+- `packaging/build_macos.sh --install` — dodatkowo kopiuje aplikację do `/Applications`
+
+Pierwsze budowanie trwa kilkanaście minut, a gotowa aplikacja zajmuje ok. 1,3 GB (torch, transformers, Qt).
+Modele Whisper/NLLB nie są wbudowane — pobierają się przy pierwszym użyciu, jak dotąd.
+Backend tłumaczeń "MLX Apple" nie jest dołączany (mlx-lm koliduje z whisperx — patrz `requirements.txt`).
+
+### Weryfikacja
+- `dist/LinguaBee.app/Contents/MacOS/LinguaBee --selftest` — sprawdza, czy wszystkie biblioteki
+  i wbudowane `ffmpeg`/`ffprobe` są dostępne wewnątrz aplikacji.
+- `dist/LinguaBee.app/Contents/MacOS/LinguaBee` — uruchomienie z terminala pokazuje logi, których
+  po dwukliku nie widać.
+
+### Gdzie aplikacja zapisuje dane
+Spakowana aplikacja nie zapisuje niczego obok siebie:
+- wyniki (TXT/DOCX/SRT, pobrane audio): `~/Documents/LinguaBee`
+- modele, ustawienia (`user_settings.json`) i szablony promptów: `~/Library/Application Support/LinguaBee`
+
+Uruchomienie ze źródeł (`python main.py`) nadal używa katalogów `output/`, `models/`, `prompts/` obok `main.py`.
+
+### Diaryzacja bez bibliotek ffmpeg
+Diaryzacja (pyannote 4) domyślnie dekoduje audio przez `torchcodec`, który wymaga bibliotek współdzielonych
+ffmpeg (`libav*.dylib`). LinguaBee omija to: dekoduje audio przez PyAV i przekazuje pyannote gotową falę
+w pamięci, więc diaryzacja działa zarówno ze źródeł, jak i w zbudowanej aplikacji, bez `brew install ffmpeg`.

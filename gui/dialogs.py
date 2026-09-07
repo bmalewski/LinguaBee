@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpinBox, QVBoxLayout, QGridLayout, QDialog, QDialogButtonBox, QHBoxLayout, QGroupBox, QFormLayout, QTextEdit)
 
 from gui.prompt_template_mixin import PromptTemplateMixin
+from config import prompts_subdir
 
 # ApiKeyDialog removed: OpenAI/Gemini API key dialogs are no longer used in the GUI per user request.
 
@@ -312,8 +313,7 @@ class BartSummarizationSettingsDialog(PromptTemplateMixin, QDialog):
         buttons.rejected.connect(self.reject)
         self.layout.addWidget(buttons, 7, 0, 1, 4)
 
-        self.prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts', 'summary_bart')
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        self.prompts_dir = prompts_subdir('summary_bart')
         self.template_combo.currentTextChanged.connect(self._on_template_selected)
         self._load_templates()
 
@@ -451,8 +451,7 @@ class CorrectionSettingsDialog(PromptTemplateMixin, QDialog):
         self.layout.addWidget(buttons, 4, 0, 1, 4)
 
         # templates directory (project_root/prompts)
-        self.prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts')
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        self.prompts_dir = prompts_subdir()
 
         # wire up template selection to load file contents
         self.template_combo.currentTextChanged.connect(self._on_template_selected)
@@ -533,8 +532,7 @@ class OllamaSummarySettingsDialog(CorrectionSettingsDialog):
         original_prompt = current_prompt or self.prompt_edit.toPlainText()
 
         # wspólny katalog szablonów dla sekcji streszczenie (Ollama + Gemini)
-        self.prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts', 'summary')
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        self.prompts_dir = prompts_subdir('summary')
         self._load_templates()
         # Nie nadpisuj promptu użytkownika po przeładowaniu listy szablonów.
         if isinstance(original_prompt, str) and original_prompt.strip():
@@ -551,8 +549,7 @@ class OllamaTranslationSettingsDialog(CorrectionSettingsDialog):
         )
         original_prompt = current_prompt or self.prompt_edit.toPlainText()
 
-        self.prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts', 'translation')
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        self.prompts_dir = prompts_subdir('translation')
         self._load_templates()
         self.layout.addWidget(QLabel("Paczka segmentów SRT (tłumaczenie):"), 5, 0)
         self.translation_segment_batch_spin = QSpinBox()
@@ -709,8 +706,7 @@ class OpenRouterSummarySettingsDialog(PromptTemplateMixin, QDialog):
         buttons.rejected.connect(self.reject)
         self.layout.addWidget(buttons, 5, 0, 1, 4)
 
-        self.prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts', 'summary')
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        self.prompts_dir = prompts_subdir('summary')
         self.template_combo.currentTextChanged.connect(self._on_template_selected)
         self._load_templates()
         if isinstance(original_prompt, str) and original_prompt.strip():
@@ -784,8 +780,7 @@ class OpenRouterTranslationSettingsDialog(PromptTemplateMixin, QDialog):
         buttons.rejected.connect(self.reject)
         self.layout.addWidget(buttons, 6, 0, 1, 4)
 
-        self.prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts', 'translation')
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        self.prompts_dir = prompts_subdir('translation')
         self.template_combo.currentTextChanged.connect(self._on_template_selected)
         self._load_templates()
         if isinstance(original_prompt, str) and original_prompt.strip():
@@ -835,8 +830,7 @@ class GeminiSummarySettingsDialog(PromptTemplateMixin, QDialog):
         self.layout.addWidget(buttons, 4, 0, 1, 4)
 
         # wspólny katalog szablonów dla sekcji streszczenie (Ollama + Gemini)
-        self.prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts', 'summary')
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        self.prompts_dir = prompts_subdir('summary')
         self.template_combo.currentTextChanged.connect(self._on_template_selected)
         self._load_templates()
         # Keep current prompt from settings; avoid auto-overwrite by first template.

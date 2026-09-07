@@ -39,9 +39,10 @@ python-docx
 # Opcjonalne backendy lokalne (zainstaluj ręcznie na docelowej platformie)
 # ---------------------------------------------------------------------------
 
-# Apple Silicon (Mac M1/M2/M3/M4) — MLX backend
-# pip install mlx-lm
-# mlx-lm
+# Apple Silicon (Mac M1/M2/M3/M4) — MLX backend (opcjonalny, domyślnie NIE instalowany)
+# UWAGA: mlx-lm >= 0.30 wymaga transformers 5 (huggingface-hub 1.x), niezgodnych z whisperx.
+# Jeśli chcesz użyć backendu "MLX Apple": pip install "mlx-lm<0.30"
+# mlx-lm<0.30
 
 # NVIDIA GPU (np. RTX 3090 Ti) — llama-cpp-python z obsługą CUDA
 # WAŻNE: wymagana kompilacja z flagą CUDA, NIE zwykłe pip install

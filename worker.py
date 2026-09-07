@@ -255,9 +255,14 @@ class TranscriptionThread(QThread):
                         try:
                             import subprocess, json, sys
 
-                            runner_path = os.path.join(os.path.dirname(__file__), 'tools', 'process_audio_runner.py')
                             timeout_secs = getattr(self.config, 'audio_processing_timeout', 300)
-                            cmd = [sys.executable, runner_path, audio_path]
+                            if getattr(sys, 'frozen', False):
+                                # Spakowana aplikacja: sys.executable to binarka aplikacji,
+                                # a main.py obsługuje tryb --audio-runner przed importem Qt.
+                                cmd = [sys.executable, '--audio-runner', audio_path]
+                            else:
+                                runner_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools', 'process_audio_runner.py')
+                                cmd = [sys.executable, runner_path, audio_path]
                             # Build config to pass to runner (respect GUI settings)
                             cfg_payload = {
                                 'enable_denoising': bool(getattr(self.config, 'enable_denoising', False)),

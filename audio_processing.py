@@ -10,6 +10,29 @@ from config import downloads_dir
 # Keep a global cache for the pipeline to avoid reloading it.
 diarization_pipeline_cache = {}
 
+PYANNOTE_SAMPLE_RATE = 16000
+
+
+def _load_audio_for_pyannote(audio_path: str, status_signal=None):
+    """Zwraca wejście dla pipeline'u pyannote: {"waveform": (1, T) float32, "sample_rate": 16000}.
+
+    Dekoduje przez PyAV (faster_whisper.audio.decode_audio), więc nie wymaga torchcodec
+    ani bibliotek ffmpeg. Gdy dekodowanie się nie powiedzie, zwraca ścieżkę pliku, aby
+    pyannote spróbował własnej ścieżki dekodowania.
+    """
+    try:
+        from faster_whisper.audio import decode_audio
+        samples = decode_audio(audio_path, sampling_rate=PYANNOTE_SAMPLE_RATE)
+        waveform = torch.from_numpy(np.ascontiguousarray(samples, dtype=np.float32)).unsqueeze(0)
+        return {"waveform": waveform, "sample_rate": PYANNOTE_SAMPLE_RATE}
+    except Exception as e:
+        if status_signal is not None:
+            status_signal.emit(
+                f"Nie udało się zdekodować audio przez PyAV ({e}); pyannote spróbuje odczytać plik samodzielnie.",
+                "warning",
+            )
+        return audio_path
+
 def diarize_audio(audio_path: str, config, status_signal, progress_signal):
     """
     Performs speaker diarization using pyannote.audio.
@@ -46,7 +69,11 @@ def diarize_audio(audio_path: str, config, status_signal, progress_signal):
         
         status_signal.emit("Wykonywanie diaryzacji...", "info")
         num_speakers = getattr(config, 'num_speakers', 0)
-        diarization = pipeline(audio_path, num_speakers=num_speakers if num_speakers > 0 else None)
+        # pyannote 4 dekoduje pliki przez torchcodec, który wymaga bibliotek współdzielonych
+        # ffmpeg (libav*.dylib) — często niedostępnych (np. w spakowanej aplikacji).
+        # Dekodujemy audio sami przez PyAV (faster-whisper) i przekazujemy falę w pamięci.
+        pipeline_input = _load_audio_for_pyannote(audio_path, status_signal)
+        diarization = pipeline(pipeline_input, num_speakers=num_speakers if num_speakers > 0 else None)
         status_signal.emit("Diaryzacja zakończona.", "info")
         
         # pyannote.audio 4.x zwraca DiarizeOutput; adnotacja jest w polu speaker_diarization.

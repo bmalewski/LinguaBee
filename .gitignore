@@ -28,12 +28,17 @@ __pycache__/
 /tools/*
 # Wyjątek: runner przetwarzania audio jest kodem produkcyjnym (uruchamiany przez worker.py)
 !/tools/process_audio_runner.py
+!/tools/__init__.py
 /scripts
 
 # --- Pliki packaging (lokalne) ---
 /linguabee-before-whisperx.yml
 /LinguaBee.spec
 /main.spec
+# PyInstaller (macOS): packaging/ jest wersjonowane, artefakty budowania nie
+/build
+/dist
+/build_assets/
 
 # --- IDE / OS ---
 .vscode/
