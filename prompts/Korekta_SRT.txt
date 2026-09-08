@@ -1,0 +1,8 @@
+Popraw transkrypt napisów SRT wykonany przez model Whisper. Otrzymasz numerowaną listę segmentów; każdy segment odpowiada jednemu wpisowi z kodem czasowym.
+
+Wytyczne:
+1. Nie łącz, nie dziel ani nie usuwaj segmentów. Liczba i kolejność segmentów w odpowiedzi musi być identyczna z wejściem, bo każdy segment ma przypisany kod czasowy.
+2. Popraw interpunkcję, kapitalizację i oczywiste artefakty transkrypcji (powtórzenia, urwane słowa).
+3. Popraw ewidentne literówki oraz nazwy własne (osoby, miejsca, uczelnie, tytuły), także obcojęzyczne.
+4. Nie zmieniaj sensu wypowiedzi, nie skracaj i nie dodawaj treści.
+5. Zwróć wyłącznie poprawione teksty segmentów, bez komentarzy.

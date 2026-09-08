@@ -27,12 +27,17 @@ def run_correction_step(
     adapters,
 ):
     corr_mode = getattr(config, "transcription_correction", "Brak")
-    corr_prompt = getattr(config, "correction_prompt", "")
+    # Osobne prompty: TXT/DOCX (tekst ciągły) i SRT (segmenty z kodami czasowymi).
+    corr_prompt_text = str(getattr(config, "correction_prompt", "") or "").strip()
+    corr_prompt_srt = str(getattr(config, "correction_prompt_srt", "") or "").strip()
+    if not corr_prompt_srt:
+        # Zgodność wstecz: brak osobnego promptu SRT -> użyj wspólnego.
+        corr_prompt_srt = corr_prompt_text
 
     if not corr_mode or corr_mode == "Brak":
         return text, segments, gemini_rate_limited_until
 
-    if not isinstance(corr_prompt, str) or len(corr_prompt.strip()) < 20:
+    if len(corr_prompt_text) < 20 and len(corr_prompt_srt) < 20:
         status_cb("Korekta pominięta: prompt jest pusty lub za krótki (min. 20 znaków).", "warning")
         return text, segments, gemini_rate_limited_until
 
@@ -83,7 +88,13 @@ def run_correction_step(
             continue
 
         refined = ""
-        prompt_for_file = corr_prompt.strip()
+        prompt_for_file = corr_prompt_srt if ext == "srt" else corr_prompt_text
+        if len(prompt_for_file) < 20:
+            status_cb(
+                f"Korekta ({ext.upper()}) pominięta: prompt dla tego typu pliku jest pusty lub za krótki (min. 20 znaków).",
+                "warning",
+            )
+            continue
         if ext == "srt" and file_segments:
             prompt_for_file += (
                 "\n\nINSTRUKCJA: Zwróć poprawione segmenty w postaci JSON-owej listy stringów, "

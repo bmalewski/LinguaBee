@@ -4,6 +4,8 @@
 # Użycie:
 #   packaging/build_macos.sh            # buduje dist/LinguaBee.app
 #   packaging/build_macos.sh --install  # dodatkowo kopiuje do /Applications
+#   packaging/build_macos.sh --pkg      # dodatkowo buduje instalator dist/LinguaBee-<wersja>.pkg
+#   (opcje można łączyć)
 #
 # Wymagania: Mac z Apple Silicon, venv/ z Pythonem 3.12 (arm64), dostęp do sieci
 # przy pierwszym uruchomieniu (pip: pyinstaller, mlx-lm; statyczne ffmpeg/ffprobe).
@@ -105,10 +107,23 @@ codesign --verify --deep --strict "$APP" && echo "  podpis OK"
 
 echo "== gotowe =="
 du -sh "$APP"
-if [ "${1:-}" = "--install" ]; then
+DO_INSTALL=0; DO_PKG=0
+for arg in "$@"; do
+  case "$arg" in
+    --install) DO_INSTALL=1 ;;
+    --pkg) DO_PKG=1 ;;
+    *) echo "Nieznana opcja: $arg" >&2; exit 1 ;;
+  esac
+done
+if [ "$DO_INSTALL" = 1 ]; then
   rm -rf /Applications/LinguaBee.app
   cp -R "$APP" /Applications/
+  # Kopia lokalna nie ma kwarantanny, ale usuwamy ją na wszelki wypadek (np. po przeniesieniu dist/ z innego Maca).
+  xattr -dr com.apple.quarantine /Applications/LinguaBee.app 2>/dev/null || true
   echo "Zainstalowano: /Applications/LinguaBee.app"
+fi
+if [ "$DO_PKG" = 1 ]; then
+  "$ROOT/packaging/build_pkg.sh"
 fi
 echo "Test wbudowanych bibliotek:  \"$APP/Contents/MacOS/LinguaBee\" --selftest"
 echo "Uruchomienie z logami:       \"$APP/Contents/MacOS/LinguaBee\""

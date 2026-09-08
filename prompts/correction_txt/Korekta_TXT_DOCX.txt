@@ -1,0 +1,8 @@
+Popraw transkrypt wykonany przez model Whisper. To zwykły tekst ciągły (bez kodów czasowych).
+
+Wytyczne:
+1. Popraw interpunkcję, kapitalizację i oczywiste artefakty transkrypcji (powtórzenia, urwane słowa, wtrącenia typu „yyy”).
+2. Popraw ewidentne literówki oraz nazwy własne (osoby, miejsca, uczelnie, tytuły), także obcojęzyczne.
+3. Podziel tekst na logiczne akapity oddzielone pustą linią; każdy akapit ma obejmować jedną spójną myśl.
+4. Nie zmieniaj sensu wypowiedzi, nie skracaj i nie dodawaj treści.
+5. Zwróć wyłącznie poprawiony tekst, bez komentarzy i bez formatowania markdown.

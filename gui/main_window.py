@@ -90,7 +90,8 @@ class MainWindow(QMainWindow):
         self.log_level = "info"
         # Correction (Korekta) settings
         self.correction_ollama_model_name = ""
-        self.correction_prompt = ""
+        self.correction_prompt = ""       # prompt korekty dla TXT/DOCX
+        self.correction_prompt_srt = ""   # prompt korekty dla SRT
         self.gemini_key = ""
         self.openrouter_key = ""
         self.openrouter_model_name = "google/gemini-3.5-flash"
@@ -801,11 +802,17 @@ class MainWindow(QMainWindow):
     def open_correction_settings(self, index):
         model = self.transcription_group.correction_combo.itemText(index)
         if model == "Ollama (lokalny)":
-            dialog = CorrectionSettingsDialog(self, current_model=self.correction_ollama_model_name, current_prompt=self.correction_prompt)
+            dialog = CorrectionSettingsDialog(
+                self,
+                current_model=self.correction_ollama_model_name,
+                current_prompt=self.correction_prompt,
+                current_prompt_srt=self.correction_prompt_srt,
+            )
             if dialog.exec():
-                model_name, prompt = dialog.get_settings()
+                model_name, prompt, prompt_srt = dialog.get_settings()
                 self.correction_ollama_model_name = model_name
                 self.correction_prompt = prompt
+                self.correction_prompt_srt = prompt_srt
                 self.append_log(f"Ustawiono Korektę: model={model_name}", "info")
                 self._save_current_settings()
         elif model == "Gemini":
@@ -813,12 +820,14 @@ class MainWindow(QMainWindow):
                 self,
                 current_key=self.gemini_key,
                 current_prompt=self.correction_prompt,
+                current_prompt_srt=self.correction_prompt_srt,
                 current_transcription_segment_batch_size=self.transcription_segment_batch_size,
             )
             if dlg.exec():
-                key, prompt, batch_size = dlg.get_settings()
+                key, prompt, prompt_srt, batch_size = dlg.get_settings()
                 self.gemini_key = key
                 self.correction_prompt = prompt
+                self.correction_prompt_srt = prompt_srt
                 self.transcription_segment_batch_size = int(batch_size or self.transcription_segment_batch_size)
                 # persist
                 try:
@@ -834,13 +843,15 @@ class MainWindow(QMainWindow):
                 self,
                 current_key=self.openrouter_key,
                 current_prompt=self.correction_prompt,
+                current_prompt_srt=self.correction_prompt_srt,
                 current_model=self.openrouter_model_name,
                 current_transcription_segment_batch_size=self.transcription_segment_batch_size,
             )
             if dlg.exec():
-                key, prompt, model_name, batch_size = dlg.get_settings()
+                key, prompt, prompt_srt, model_name, batch_size = dlg.get_settings()
                 self.openrouter_key = key
                 self.correction_prompt = prompt
+                self.correction_prompt_srt = prompt_srt
                 self.openrouter_model_name = model_name or "google/gemini-3.5-flash"
                 self.transcription_segment_batch_size = int(batch_size or self.transcription_segment_batch_size)
                 try:
@@ -988,6 +999,7 @@ class MainWindow(QMainWindow):
             try:
                 self.correction_ollama_model_name = settings.get('correction_ollama_model_name', self.correction_ollama_model_name)
                 self.correction_prompt = settings.get('correction_prompt', self.correction_prompt)
+                self.correction_prompt_srt = settings.get('correction_prompt_srt', self.correction_prompt_srt)
                 self.gemini_key = settings.get('gemini_key', self.gemini_key)
                 self.openrouter_key = settings.get('openrouter_key', self.openrouter_key)
                 self.openrouter_model_name = settings.get('openrouter_model_name', self.openrouter_model_name)
@@ -1108,6 +1120,7 @@ class MainWindow(QMainWindow):
                 'transcription_correction': self.transcription_group.correction_combo.currentText(),
                 'correction_ollama_model_name': self.correction_ollama_model_name,
                 'correction_prompt': self.correction_prompt,
+                'correction_prompt_srt': self.correction_prompt_srt,
                 'gemini_key': self.gemini_key,
                 'openrouter_key': self.openrouter_key,
                 'openrouter_model_name': self.openrouter_model_name,
@@ -1327,9 +1340,16 @@ class MainWindow(QMainWindow):
             warnings.append("Wybrano zapis SRT dla wejścia TXT/DOCX; bez timestampów SRT może nie zostać zapisany.")
 
         if correction_mode != "Brak":
-            prompt = str(getattr(config, "correction_prompt", "") or "").strip()
-            if len(prompt) < 20:
-                errors.append("Korekta włączona, ale prompt jest pusty lub za krótki (min. 20 znaków).")
+            prompt_text = str(getattr(config, "correction_prompt", "") or "").strip()
+            prompt_srt = str(getattr(config, "correction_prompt_srt", "") or "").strip() or prompt_text
+            needs_text = any(f in formats_original for f in ("txt", "docx"))
+            needs_srt = "srt" in formats_original
+            if needs_text and len(prompt_text) < 20:
+                errors.append("Korekta włączona dla TXT/DOCX, ale prompt TXT/DOCX jest pusty lub za krótki (min. 20 znaków).")
+            if needs_srt and len(prompt_srt) < 20:
+                errors.append("Korekta włączona dla SRT, ale prompt SRT jest pusty lub za krótki (min. 20 znaków).")
+            if not needs_text and not needs_srt:
+                warnings.append("Korekta włączona, ale nie zaznaczono żadnego formatu plików oryginalnych; korekta zostanie pominięta.")
 
             if "Ollama" in correction_mode and not str(getattr(config, "correction_ollama_model_name", "") or "").strip():
                 errors.append("Korekta Ollama włączona, ale nie wybrano modelu.")
@@ -1453,6 +1473,7 @@ class MainWindow(QMainWindow):
             transcription_correction=self.transcription_group.correction_combo.currentText(),
             correction_ollama_model_name=self.correction_ollama_model_name,
             correction_prompt=self.correction_prompt,
+            correction_prompt_srt=self.correction_prompt_srt,
             transcription_segment_batch_size=self.transcription_segment_batch_size,
             src_lang_code=src_lang_code,
             translation_src_lang_code=translation_src_lang_code,

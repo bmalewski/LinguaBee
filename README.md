@@ -217,7 +217,7 @@ W katalogu projektu:
 - `packaging/build_macos.sh` — buduje `dist/LinguaBee.app`
 - `packaging/build_macos.sh --install` — dodatkowo kopiuje aplikację do `/Applications`
 
-Pierwsze budowanie trwa kilkanaście minut, a gotowa aplikacja zajmuje ok. 1,3 GB (torch, transformers, Qt).
+Pierwsze budowanie trwa kilkanaście minut, a gotowa aplikacja zajmuje ok. 1,1 GB (torch, transformers, Qt).
 Modele Whisper/NLLB nie są wbudowane — pobierają się przy pierwszym użyciu, jak dotąd.
 Backend tłumaczeń "MLX Apple" nie jest dołączany (mlx-lm koliduje z whisperx — patrz `requirements.txt`).
 
@@ -234,7 +234,66 @@ Spakowana aplikacja nie zapisuje niczego obok siebie:
 
 Uruchomienie ze źródeł (`python main.py`) nadal używa katalogów `output/`, `models/`, `prompts/` obok `main.py`.
 
+### Instalator .pkg
+- `packaging/build_macos.sh --pkg` — buduje aplikację i od razu instalator `dist/LinguaBee-<wersja>.pkg`
+- `packaging/build_pkg.sh` — buduje sam instalator z gotowego `dist/LinguaBee.app`
+
+Instalator (ok. 420 MB) kopiuje aplikację do `/Applications` i zastępuje starszą wersję. Wymaga Apple Silicon i macOS 14+;
+na Macu z procesorem Intel odmówi instalacji. Ekran powitalny i końcowy instalatora (`packaging/pkg/*.html`) zawierają
+instrukcję odblokowania opisaną w sekcji 10.
+
 ### Diaryzacja bez bibliotek ffmpeg
 Diaryzacja (pyannote 4) domyślnie dekoduje audio przez `torchcodec`, który wymaga bibliotek współdzielonych
 ffmpeg (`libav*.dylib`). LinguaBee omija to: dekoduje audio przez PyAV i przekazuje pyannote gotową falę
 w pamięci, więc diaryzacja działa zarówno ze źródeł, jak i w zbudowanej aplikacji, bez `brew install ffmpeg`.
+
+---
+
+## 10) Instalacja LinguaBee na innym Macu (instrukcja dla odbiorcy)
+
+LinguaBee nie jest podpisana certyfikatem Apple Developer, dlatego macOS przy pierwszym otwarciu
+pliku pobranego lub przeniesionego z innego komputera wyświetla ostrzeżenie:
+
+> **Rzecz „LinguaBee” nie została otwarta.** Apple nie może zweryfikować, czy „LinguaBee” nie zawiera
+> szkodliwego oprogramowania, które może uszkodzić Maca lub naruszyć Twoją prywatność.
+
+To zachowanie systemu (Gatekeeper), nie błąd aplikacji. Odblokowanie wykonuje się raz.
+
+### Wymagania
+- Mac z procesorem **Apple Silicon** (M1 lub nowszy) — sprawdź w menu Apple → „Ten Mac”.
+  Na Macu z procesorem Intel aplikacja nie uruchomi się.
+- macOS 14 lub nowszy.
+
+### Krok 1: Uruchom instalator
+1. Otwórz plik `LinguaBee-<wersja>.pkg` dwuklikiem.
+2. Jeśli pojawi się komunikat, że Apple nie może zweryfikować instalatora, kliknij **Gotowe**
+   (nie „Przenieś do Kosza”).
+3. Otwórz **Ustawienia systemowe → Prywatność i ochrona**, przewiń do sekcji **Ochrona**.
+   Przy wpisie o zablokowaniu instalatora kliknij **Otwórz mimo to** i potwierdź hasłem.
+4. Instalator uruchomi się. Przejdź przez kolejne ekrany; aplikacja trafi do katalogu **Programy**.
+
+### Krok 2: Uruchom aplikację
+1. Otwórz **LinguaBee** z katalogu Programy (lub z Launchpada).
+2. Jeśli ponownie pojawi się ostrzeżenie o braku weryfikacji, powtórz odblokowanie:
+   **Gotowe → Ustawienia systemowe → Prywatność i ochrona → Otwórz mimo to**, potem uruchom aplikację jeszcze raz.
+
+Alternatywa dla osób korzystających z Terminala (usuwa znacznik kwarantanny z aplikacji):
+- `xattr -dr com.apple.quarantine /Applications/LinguaBee.app`
+
+### Jeśli otrzymałeś samą aplikację (LinguaBee.app), a nie instalator
+Skopiuj `LinguaBee.app` do katalogu Programy i wykonaj Krok 2. Jeśli aplikacja przyszła w archiwum ZIP,
+rozpakuj je przed skopiowaniem.
+
+### Gdzie aplikacja zapisuje dane
+- wyniki (TXT/DOCX/SRT, pobrane audio): `~/Dokumenty/LinguaBee`
+- modele, ustawienia i szablony promptów: `~/Biblioteka/Application Support/LinguaBee`
+
+Modele Whisper i inne pobierają się przy pierwszym użyciu (od kilkuset MB do kilku GB), więc potrzebne jest
+połączenie z internetem i wolne miejsce na dysku.
+
+### Najczęstsze pytania
+- **Po odblokowaniu okno aplikacji pojawia się i znika.** Uruchom aplikację ponownie; przy pierwszym starcie
+  nowej wersji zdarza się to jednorazowo.
+- **Komunikat o braku ffmpeg.** Nie powinien się pojawić, bo `ffmpeg` jest wbudowany w aplikację.
+  Jeśli się pojawi, uruchom w Terminalu `/Applications/LinguaBee.app/Contents/MacOS/LinguaBee --selftest`
+  i prześlij wynik autorowi.

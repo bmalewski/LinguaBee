@@ -1,9 +1,9 @@
 import httpx
 import os
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpinBox, QVBoxLayout, QGridLayout, QDialog, QDialogButtonBox, QHBoxLayout, QGroupBox, QFormLayout, QTextEdit)
+from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpinBox, QVBoxLayout, QGridLayout, QDialog, QDialogButtonBox, QHBoxLayout, QGroupBox, QFormLayout, QTextEdit, QTabWidget)
 
-from gui.prompt_template_mixin import PromptTemplateMixin
+from gui.prompt_template_mixin import PromptTemplateMixin, PromptTemplateEditor
 from config import prompts_subdir
 
 # ApiKeyDialog removed: OpenAI/Gemini API key dialogs are no longer used in the GUI per user request.
@@ -373,7 +373,7 @@ class OllamaSettingsDialog(QDialog):
     def populate_models(self, current_model=""):
         # Ta sama logika co w CorrectionSettingsDialog (klasa zdefiniowana niżej w module;
         # w chwili wywołania jest już dostępna).
-        return CorrectionSettingsDialog.populate_models(self, current_model)
+        return OllamaPromptSettingsDialog.populate_models(self, current_model)
 
     def get_settings(self):
         model = self.model_combo.currentText()
@@ -381,8 +381,11 @@ class OllamaSettingsDialog(QDialog):
             model = ""
         return model
 
-class CorrectionSettingsDialog(PromptTemplateMixin, QDialog):
-    """Dialog do konfiguracji opcji Korekta (Ollama + prompt).
+class OllamaPromptSettingsDialog(PromptTemplateMixin, QDialog):
+    """Bazowy dialog Ollama: model + pojedynczy prompt z szablonami.
+
+    Używany przez dialogi streszczenia i tłumaczenia Ollama. Korekta ma własny
+    dialog (CorrectionSettingsDialog) z osobnymi promptami dla TXT/DOCX i SRT.
 
     Templates are persisted as individual text files under a `prompts/` directory
     located in the project root. Selecting a template loads its contents into the
@@ -523,7 +526,7 @@ class CorrectionSettingsDialog(PromptTemplateMixin, QDialog):
         return model, prompt
 
 
-class OllamaSummarySettingsDialog(CorrectionSettingsDialog):
+class OllamaSummarySettingsDialog(OllamaPromptSettingsDialog):
     """Dialog ustawień streszczeń Ollama: model + prompt + szablony (bez pól Gemini)."""
     def __init__(self, parent=None, current_model="", current_prompt=""):
         super().__init__(parent=parent, current_model=current_model, current_prompt=current_prompt)
@@ -539,7 +542,7 @@ class OllamaSummarySettingsDialog(CorrectionSettingsDialog):
             self.prompt_edit.setPlainText(original_prompt)
 
 
-class OllamaTranslationSettingsDialog(CorrectionSettingsDialog):
+class OllamaTranslationSettingsDialog(OllamaPromptSettingsDialog):
     """Dialog ustawień tłumaczenia Ollama: model + prompt + szablony."""
     def __init__(self, parent=None, current_model="", current_prompt="", current_translation_segment_batch_size=250):
         super().__init__(parent=parent, current_model=current_model, current_prompt=current_prompt)
@@ -563,9 +566,84 @@ class OllamaTranslationSettingsDialog(CorrectionSettingsDialog):
         model, prompt = super().get_settings()
         return model, prompt, self.translation_segment_batch_spin.value()
 
+class _CorrectionPromptTabs(QTabWidget):
+    """Dwa niezależne edytory promptów korekty: TXT/DOCX oraz SRT (z szablonami)."""
+
+    def __init__(self, current_prompt_text="", current_prompt_srt="", parent=None):
+        super().__init__(parent)
+        self.text_editor = PromptTemplateEditor(
+            prompts_subdir('correction_txt'),
+            current_prompt=current_prompt_text,
+            placeholder=(
+                "Prompt korekty dla plików TXT/DOCX (tekst ciągły, bez kodów czasowych). "
+                "Program sam dopisze instrukcję techniczną o formacie odpowiedzi."
+            ),
+            default_prompt_filename="korekta_txt",
+        )
+        self.srt_editor = PromptTemplateEditor(
+            prompts_subdir(),
+            current_prompt=current_prompt_srt,
+            placeholder=(
+                "Prompt korekty dla napisów SRT (segmenty z kodami czasowymi; liczba i kolejność "
+                "segmentów muszą zostać zachowane). Program sam dopisze instrukcję o formacie JSON."
+            ),
+            default_prompt_filename="korekta_srt",
+        )
+        self.addTab(self.text_editor, "Prompt TXT / DOCX")
+        self.addTab(self.srt_editor, "Prompt SRT")
+
+    def prompts(self):
+        return self.text_editor.text(), self.srt_editor.text()
+
+
+class CorrectionSettingsDialog(QDialog):
+    """Ustawienia korekty (Ollama): model + osobne prompty dla TXT/DOCX i SRT."""
+
+    populate_models = OllamaPromptSettingsDialog.populate_models
+
+    def __init__(self, parent=None, current_model="", current_prompt="", current_prompt_srt=""):
+        super().__init__(parent)
+        self.setWindowTitle("Ustawienia Korekty (Ollama)")
+        self.layout = QGridLayout(self)
+
+        self.layout.addWidget(QLabel("Model Ollama:"), 0, 0)
+        self.model_combo = QComboBox()
+        self.model_combo.setEditable(False)
+        self.model_combo.addItems(["gpt-oss:7b", "gpt-oss:13b", "vicuna:13b", "mistral:7b"])
+        self.layout.addWidget(self.model_combo, 0, 1)
+        self.refresh_btn = QPushButton("Odśwież listę modeli")
+        self.refresh_btn.clicked.connect(self.populate_models)
+        self.layout.addWidget(self.refresh_btn, 0, 2)
+
+        self.prompt_tabs = _CorrectionPromptTabs(current_prompt, current_prompt_srt)
+        self.layout.addWidget(self.prompt_tabs, 1, 0, 1, 3)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        ok_btn = buttons.button(QDialogButtonBox.Ok)
+        cancel_btn = buttons.button(QDialogButtonBox.Cancel)
+        if ok_btn:
+            ok_btn.setText("OK")
+            ok_btn.setStyleSheet("background-color: #1976D2; color: white; padding:6px 12px;")
+        if cancel_btn:
+            cancel_btn.setText("ANULUJ")
+            cancel_btn.setStyleSheet("background-color: #D32F2F; color: white; padding:6px 12px;")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        self.layout.addWidget(buttons, 2, 0, 1, 3)
+
+        self.populate_models(current_model)
+
+    def get_settings(self):
+        model = self.model_combo.currentText()
+        if model.startswith("Błąd:") or model == "Brak modeli Ollama":
+            model = ""
+        prompt_text, prompt_srt = self.prompt_tabs.prompts()
+        return model, prompt_text, prompt_srt
+
+
 class GeminiCorrectionSettingsDialog(QDialog):
-    """Ustawienia korekty dla Gemini: tylko klucz API + prompt (bez modeli Ollama)."""
-    def __init__(self, parent=None, current_key="", current_prompt="", current_transcription_segment_batch_size=200):
+    """Ustawienia korekty dla Gemini: klucz API + osobne prompty TXT/DOCX i SRT."""
+    def __init__(self, parent=None, current_key="", current_prompt="", current_prompt_srt="", current_transcription_segment_batch_size=200):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Korekty (Gemini API)")
         self.layout = QGridLayout(self)
@@ -576,31 +654,28 @@ class GeminiCorrectionSettingsDialog(QDialog):
         self.key_input.setEchoMode(QLineEdit.Password)
         self.layout.addWidget(self.key_input, 0, 1, 1, 3)
 
-        self.layout.addWidget(QLabel("Prompt (korekta):"), 1, 0)
-        self.prompt_edit = QTextEdit()
-        self.prompt_edit.setPlaceholderText("Wprowadź prompt do korekty dla Gemini...")
-        self.prompt_edit.setMinimumHeight(240)
-        self.prompt_edit.setPlainText(current_prompt or "")
-        self.layout.addWidget(self.prompt_edit, 2, 0, 1, 4)
+        self.prompt_tabs = _CorrectionPromptTabs(current_prompt, current_prompt_srt)
+        self.layout.addWidget(self.prompt_tabs, 1, 0, 1, 4)
 
-        self.layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"), 3, 0)
+        self.layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"), 2, 0)
         self.transcription_segment_batch_spin = QSpinBox()
         self.transcription_segment_batch_spin.setRange(1, 1000)
         self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 200))
-        self.layout.addWidget(self.transcription_segment_batch_spin, 3, 1, 1, 3)
+        self.layout.addWidget(self.transcription_segment_batch_spin, 2, 1, 1, 3)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        self.layout.addWidget(buttons, 4, 0, 1, 4)
+        self.layout.addWidget(buttons, 3, 0, 1, 4)
 
     def get_settings(self):
-        return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), self.transcription_segment_batch_spin.value()
+        prompt_text, prompt_srt = self.prompt_tabs.prompts()
+        return self.key_input.text().strip(), prompt_text, prompt_srt, self.transcription_segment_batch_spin.value()
 
 
 class OpenRouterCorrectionSettingsDialog(QDialog):
-    """Ustawienia korekty dla OpenRouter: klucz API + prompt."""
-    def __init__(self, parent=None, current_key="", current_prompt="", current_model="google/gemini-3.5-flash", current_transcription_segment_batch_size=200):
+    """Ustawienia korekty dla OpenRouter: klucz API + model + osobne prompty TXT/DOCX i SRT."""
+    def __init__(self, parent=None, current_key="", current_prompt="", current_prompt_srt="", current_model="google/gemini-3.5-flash", current_transcription_segment_batch_size=200):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Korekty (OpenRouter API)")
         self.layout = QGridLayout(self)
@@ -622,10 +697,7 @@ class OpenRouterCorrectionSettingsDialog(QDialog):
         self.model_input.addItem("GPT-5 mini", userData="openai/gpt-5-mini")
         model_to_set = current_model or "google/gemini-3.5-flash"
         idx = self.model_input.findData(model_to_set)
-        if idx >= 0:
-            self.model_input.setCurrentIndex(idx)
-        else:
-            self.model_input.setCurrentIndex(0)
+        self.model_input.setCurrentIndex(idx if idx >= 0 else 0)
         self.layout.addWidget(self.model_input, 1, 1, 1, 3)
 
         self.layout.addWidget(QLabel("Paczka segmentów SRT (korekta):"), 2, 0)
@@ -634,21 +706,18 @@ class OpenRouterCorrectionSettingsDialog(QDialog):
         self.transcription_segment_batch_spin.setValue(int(current_transcription_segment_batch_size or 200))
         self.layout.addWidget(self.transcription_segment_batch_spin, 2, 1, 1, 3)
 
-        self.layout.addWidget(QLabel("Prompt (korekta):"), 3, 0)
-        self.prompt_edit = QTextEdit()
-        self.prompt_edit.setPlaceholderText("Wprowadź prompt do korekty dla OpenRouter...")
-        self.prompt_edit.setMinimumHeight(240)
-        self.prompt_edit.setPlainText(current_prompt or "")
-        self.layout.addWidget(self.prompt_edit, 4, 0, 1, 4)
+        self.prompt_tabs = _CorrectionPromptTabs(current_prompt, current_prompt_srt)
+        self.layout.addWidget(self.prompt_tabs, 3, 0, 1, 4)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        self.layout.addWidget(buttons, 5, 0, 1, 4)
+        self.layout.addWidget(buttons, 4, 0, 1, 4)
 
     def get_settings(self):
         model_id = self.model_input.currentData() or "google/gemini-3.5-flash"
-        return self.key_input.text().strip(), self.prompt_edit.toPlainText().strip(), str(model_id).strip(), self.transcription_segment_batch_spin.value()
+        prompt_text, prompt_srt = self.prompt_tabs.prompts()
+        return self.key_input.text().strip(), prompt_text, prompt_srt, str(model_id).strip(), self.transcription_segment_batch_spin.value()
 
 
 class OpenRouterSummarySettingsDialog(PromptTemplateMixin, QDialog):

@@ -16,7 +16,9 @@ Wymagania wzgl\u0119dem klasy korzystaj\u0105cej z mixinu:
 import os
 import re
 
-from PySide6.QtWidgets import QMessageBox, QInputDialog
+from PySide6.QtWidgets import (
+    QMessageBox, QInputDialog, QWidget, QGridLayout, QLabel, QComboBox, QPushButton, QTextEdit,
+)
 
 
 class PromptTemplateMixin:
@@ -116,3 +118,53 @@ class PromptTemplateMixin:
             QMessageBox.information(self, "Usuni\u0119to", f"Usuni\u0119to szablon '{name}'.")
         except Exception as e:
             QMessageBox.warning(self, "B\u0142\u0105d", f"Nie uda\u0142o si\u0119 usun\u0105\u0107 szablonu: {e}")
+
+
+class PromptTemplateEditor(PromptTemplateMixin, QWidget):
+    """Samodzielny widget: lista szablonów + przyciski Zapisz/Usuń + pole promptu.
+
+    Pozwala umieścić w jednym dialogu kilka niezależnych edytorów promptów
+    (np. osobny prompt dla plików TXT/DOCX i osobny dla SRT), z których każdy ma
+    własny katalog szablonów.
+    """
+
+    def __init__(self, prompts_dir: str, current_prompt: str = "", placeholder: str = "",
+                 min_height: int = 220, default_prompt_filename: str = "prompt", parent=None):
+        super().__init__(parent)
+        self.prompts_dir = prompts_dir
+        self.default_prompt_filename = default_prompt_filename
+
+        layout = QGridLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        layout.addWidget(QLabel("Szablony promptów:"), 0, 0)
+        self.template_combo = QComboBox()
+        layout.addWidget(self.template_combo, 0, 1)
+
+        self.save_template_btn = QPushButton("Zapisz szablon")
+        self.save_template_btn.clicked.connect(self._save_template)
+        layout.addWidget(self.save_template_btn, 0, 2)
+
+        self.delete_template_btn = QPushButton("Usuń szablon")
+        self.delete_template_btn.clicked.connect(self._delete_template)
+        layout.addWidget(self.delete_template_btn, 0, 3)
+
+        self.prompt_edit = QTextEdit()
+        if placeholder:
+            self.prompt_edit.setPlaceholderText(placeholder)
+        self.prompt_edit.setMinimumHeight(min_height)
+        layout.addWidget(self.prompt_edit, 1, 0, 1, 4)
+        layout.setColumnStretch(1, 1)
+
+        self.template_combo.currentTextChanged.connect(self._on_template_selected)
+        self._load_templates()
+        if isinstance(current_prompt, str) and current_prompt.strip():
+            self.prompt_edit.setPlainText(current_prompt)
+            # Zaznacz pasujący szablon bez nadpisywania treści.
+            self._load_templates()
+
+    def text(self) -> str:
+        return self.prompt_edit.toPlainText().strip()
+
+    def set_text(self, value: str) -> None:
+        self.prompt_edit.setPlainText(value or "")

@@ -14,7 +14,7 @@ from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 ASSETS = os.path.join(ROOT, "build_assets")
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 
 # --- Zasoby tylko do odczytu (config.resource_path) ---
 datas = [

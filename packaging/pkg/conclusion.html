@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head><meta charset="utf-8"><style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.45;margin:12px}h2{font-size:16px;margin:0 0 8px}ol,ul{padding-left:18px}code{font-family:Menlo,monospace;font-size:12px;background:#eee;padding:1px 4px;border-radius:3px}</style></head>
+<body>
+<h2>Instalacja zakończona</h2>
+<p>LinguaBee znajduje się w katalogu <b>Programy</b>.</p>
+
+<p><b>Jeśli przy pierwszym uruchomieniu pojawi się komunikat „Apple nie może zweryfikować, czy LinguaBee nie zawiera szkodliwego oprogramowania”:</b></p>
+<ol>
+  <li>Kliknij <b>Gotowe</b> (nie „Przenieś do Kosza”).</li>
+  <li>Otwórz <b>Ustawienia systemowe → Prywatność i ochrona</b>.</li>
+  <li>Przewiń do sekcji <b>Ochrona</b>. Przy wpisie o zablokowaniu LinguaBee kliknij <b>Otwórz mimo to</b> i potwierdź hasłem.</li>
+  <li>Uruchom LinguaBee ponownie. Ten krok wykonuje się tylko raz.</li>
+</ol>
+<p>Alternatywnie w Terminalu: <code>xattr -dr com.apple.quarantine /Applications/LinguaBee.app</code></p>
+
+<p><b>Gdzie aplikacja zapisuje dane:</b></p>
+<ul>
+  <li>wyniki (TXT/DOCX/SRT): <code>~/Dokumenty/LinguaBee</code>,</li>
+  <li>modele, ustawienia i szablony promptów: <code>~/Biblioteka/Application Support/LinguaBee</code>.</li>
+</ul>
+</body>
+</html>

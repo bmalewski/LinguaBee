@@ -197,7 +197,11 @@ class TranscriptionConfig:
     transcription_correction: str = "Brak"
     correction_ollama_model_name: Optional[str] = None
     openrouter_model_name: Optional[str] = None
+    # Prompt korekty dla plików tekstowych (TXT/DOCX).
     correction_prompt: Optional[str] = None
+    # Osobny prompt korekty dla napisów SRT (segmenty z kodami czasowymi). Gdy pusty,
+    # correction_service używa correction_prompt.
+    correction_prompt_srt: Optional[str] = None
     transcription_segment_batch_size: int = 200
     translation_ollama_prompt: Optional[str] = None
     translation_openrouter_prompt: Optional[str] = None
