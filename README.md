@@ -59,8 +59,9 @@ Poniżej znajdziesz **kompletną instrukcję instalacji na Windows i macOS**.
 - Wsparcie ROCm dla PyTorch (Windows i Linux) jest wykrywane i instalowane automatycznie
   przez skrypt `install_pytorch.py` (patrz niżej) - nie trzeba pobierać niczego ręcznie.
 - Przy kilku kartach AMD (np. Radeon 8060S + zewnętrzny Radeon AI PRO R9700) skrypt instaluje
-  kod dla wszystkich wykrytych kart. LinguaBee domyślnie używa pierwszej karty;
-  inną wybierzesz zmienną środowiskową przed uruchomieniem, np. `$env:HIP_VISIBLE_DEVICES="1"`.
+  kod dla wszystkich wykrytych kart. PyTorch z ROCm może używać tylko jednej karty w procesie,
+  więc LinguaBee pracuje na jednej: kartę wybierasz w ustawieniach Whisper/NLLB/streszczeń
+  (zmiana działa po ponownym uruchomieniu) albo zmienną `$env:HIP_VISIBLE_DEVICES="1"`.
 
 ### Whisper i NLLB na karcie AMD (CTranslate2 z ROCm, opcjonalnie)
 Transkrypcja (faster-whisper) i tłumaczenie NLLB działają na CTranslate2. Wersja z PyPI obsługuje

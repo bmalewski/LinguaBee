@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
 
         self.local_files = []
         # Populate available devices (CPU + CUDA GPUs when available)
+        self.amd_gpu = load_settings().get('amd_gpu', 0)
         self.available_devices = self._detect_available_devices()
         # Apply hardware-aware defaults (overridden by saved settings later)
         self.whisper_variant = _HW_DEFAULTS.get("whisper_variant", "medium")
@@ -154,7 +155,17 @@ class MainWindow(QMainWindow):
         try:
             if TORCH_AVAILABLE:
                 try:
-                    if torch.cuda.is_available():
+                    amd_gpus = self._list_amd_gpus() if getattr(torch.version, "hip", None) else []
+                    if amd_gpus:
+                        # ROCm: proces widzi jedną kartę (HIP_VISIBLE_DEVICES), zawsze jako cuda:0.
+                        # Aktywna karta idzie pierwsza, bo dialogi dopasowują wybór po device_index.
+                        active = os.environ.get("HIP_VISIBLE_DEVICES", "0")
+                        amd_gpus.sort(key=lambda g: g[0] != active)
+                        for phys, name in amd_gpus:
+                            note = "" if phys == active else " – po ponownym uruchomieniu"
+                            disp = f"GPU {phys}: {name}{note}"
+                            devices.append((disp, {'device': 'cuda', 'device_index': 0, 'amd_gpu': int(phys)}))
+                    elif torch.cuda.is_available():
                         count = torch.cuda.device_count()
                         for i in range(count):
                             try:
@@ -169,6 +180,44 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         return devices
+
+    @staticmethod
+    def _list_amd_gpus():
+        """Lista (indeks HIP, nazwa) wszystkich kart AMD, także ukrytych przez HIP_VISIBLE_DEVICES.
+
+        Sprawdzane w osobnym procesie, bo w tym widoczna jest tylko jedna karta.
+        Same nazwy kart można bezpiecznie odczytać przy obu widocznych.
+        """
+        import json
+        import subprocess
+        import sys
+        from config import is_frozen
+        if is_frozen():
+            return []
+        env = {k: v for k, v in os.environ.items() if k != "HIP_VISIBLE_DEVICES"}
+        code = ("import json, torch; print(json.dumps([torch.cuda.get_device_name(i) "
+                "for i in range(torch.cuda.device_count())]))")
+        try:
+            out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True,
+                                 text=True, timeout=60,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            names = json.loads(out.stdout.strip().splitlines()[-1])
+            return [(str(i), n) for i, n in enumerate(names)]
+        except Exception:
+            return []
+
+    def _check_amd_gpu_choice(self, device_data):
+        """Zapamiętuje wybór innej karty AMD; zmiana działa po ponownym uruchomieniu."""
+        if not device_data or 'amd_gpu' not in device_data:
+            return
+        chosen = device_data['amd_gpu']
+        self.amd_gpu = chosen
+        if str(chosen) != os.environ.get("HIP_VISIBLE_DEVICES", "0"):
+            QMessageBox.information(
+                self, "Zmiana karty GPU",
+                f"Wybrano kartę GPU {chosen}. PyTorch z ROCm może używać tylko jednej karty "
+                "w procesie, więc zmiana zadziała po ponownym uruchomieniu LinguaBee "
+                "(dotyczy Whisper, NLLB i streszczeń).")
 
     def _init_widgets(self):
         self.source_group = SourceGroup()
@@ -658,6 +707,7 @@ class MainWindow(QMainWindow):
                  self.whisper_srt_max_chars_per_line) = settings
                 self.whisper_device = device_settings['device']
                 self.whisper_device_index = device_settings.get('device_index', 0)
+                self._check_amd_gpu_choice(device_settings)
                 self.append_log(f"Ustawiono Whisper: {self.whisper_variant}, {self.whisper_device}", "info")
                 # persist
                 self._save_current_settings()
@@ -692,6 +742,7 @@ class MainWindow(QMainWindow):
                 self.nllb_variant, device_settings, self.translation_segment_batch_size = dialog.get_settings()
                 self.nllb_device = device_settings['device']
                 self.nllb_device_index = device_settings.get('device_index', 0)
+                self._check_amd_gpu_choice(device_settings)
                 self.append_log(f"Ustawiono NLLB: {self.nllb_variant}, {self.nllb_device}", "info")
                 # persist
                 self._save_current_settings()
@@ -926,6 +977,7 @@ class MainWindow(QMainWindow):
                 self.hf_summary_model_name = settings["model_name"]
                 self.hf_summary_device = settings["device"]
                 self.hf_summary_device_index = settings["device_index"]
+                self._check_amd_gpu_choice(dialog.device_combo.currentData())
                 self.hf_summary_max_length = settings["max_length"]
                 self.hf_summary_min_length = settings["min_length"]
                 self.hf_summary_num_beams = settings["num_beams"]
@@ -1072,6 +1124,7 @@ class MainWindow(QMainWindow):
                 'whisper_variant': self.whisper_variant,
                 'whisper_device': self.whisper_device,
                 'whisper_device_index': self.whisper_device_index,
+                'amd_gpu': self.amd_gpu,
 
                 'nllb_variant': self.nllb_variant,
                 'nllb_device': self.nllb_device,

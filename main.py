@@ -10,12 +10,14 @@ multiprocessing.freeze_support()
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-# AMD ROCm: przy kilku widocznych kartach PyTorch potrafi się wywrócić, więc
-# domyślnie pokazujemy tylko pierwszą (inną kartę: HIP_VISIBLE_DEVICES=1).
-# Musi być ustawione przed pierwszym importem torch/ctranslate2.
-os.environ.setdefault("HIP_VISIBLE_DEVICES", "0")
-
 import config  # tworzy katalogi zapisu i (w spakowanej aplikacji) seeduje szablony promptów
+
+# AMD ROCm: przy kilku widocznych kartach PyTorch się wywraca (0xC0000005),
+# więc procesowi pokazujemy tylko jedną kartę: wybraną w ustawieniach
+# ('amd_gpu', domyślnie 0) albo podaną ręcznie w HIP_VISIBLE_DEVICES.
+# Musi być ustawione przed pierwszym importem torch/ctranslate2.
+if "HIP_VISIBLE_DEVICES" not in os.environ:
+    os.environ["HIP_VISIBLE_DEVICES"] = str(config.load_settings().get("amd_gpu", 0))
 
 
 def _bootstrap_runtime_env() -> None:
