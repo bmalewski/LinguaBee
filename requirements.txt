@@ -1,8 +1,16 @@
 # LinguaBee - pełne zależności runtime
 
-# GPU (CUDA) - zostaw, jeśli używasz GPU. Dla CPU możesz usunąć tę linię.
---extra-index-url https://download.pytorch.org/whl/cu128
-torch
+# ---------------------------------------------------------------------------
+# PyTorch — WAŻNE: nie instaluj torch stąd bezpośrednio!
+# Uruchom najpierw `python install_pytorch.py`, który wykrywa platformę i GPU
+# (NVIDIA CUDA / AMD ROCm / Apple Silicon / CPU) i instaluje właściwy build:
+#   - NVIDIA GPU   -> torch z download.pytorch.org (cu128)
+#   - AMD GPU      -> torch ROCm z https://rocm.nightlies.amd.com/whl-multi-arch/
+#                     (np. AMD Ryzen AI Max+ 395 / Radeon RDNA2-3.5 -> gfx target)
+#   - Apple Silicon / CPU -> standardowe wheele PyTorch
+# Dopiero potem uruchom `pip install -r requirements.txt` - torch będzie już
+# zainstalowany z właściwym backendem, więc pip go nie nadpisze.
+# ---------------------------------------------------------------------------
 
 # GUI
 PySide6
@@ -47,4 +55,11 @@ python-docx
 # NVIDIA GPU (np. RTX 3090 Ti) — llama-cpp-python z obsługą CUDA
 # WAŻNE: wymagana kompilacja z flagą CUDA, NIE zwykłe pip install
 # CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+# AMD GPU (ROCm/HIP, Linux) — kompilacja z flagą HIP:
+# CMAKE_ARGS="-DGGML_HIPBLAS=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+# AMD GPU (Vulkan, Windows / cross-platform fallback):
+# CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+
 # llama-cpp-python

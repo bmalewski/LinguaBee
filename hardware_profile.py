@@ -51,7 +51,10 @@ def _detect() -> tuple[str, str, float]:
 
         return "apple_silicon", gpu_name, vram_gb
 
-    # --- NVIDIA CUDA ---
+    # --- NVIDIA CUDA or AMD ROCm ---
+    # PyTorch built with ROCm/HIP also reports torch.cuda.is_available() == True
+    # and uses the same "cuda" device string.  The presence of torch.version.hip
+    # (a non-None string like "6.2.4") distinguishes ROCm from CUDA.
     try:
         import torch
         if torch.cuda.is_available():
@@ -62,9 +65,19 @@ def _detect() -> tuple[str, str, float]:
                 gpu_name = props.name
             except Exception:
                 vram_gb = 0.0
-                gpu_name = "NVIDIA GPU"
-            if vram_gb >= 8.0:
-                return "nvidia_gpu", gpu_name, vram_gb
+                gpu_name = "GPU"
+
+            hip_version = getattr(torch.version, "hip", None)
+            if hip_version is not None:
+                # AMD ROCm/HIP backend – use a lower VRAM threshold because
+                # integrated AMD GPUs (e.g. Ryzen AI Max+ 395) share system RAM,
+                # so even 4 GB of reported VRAM is enough to run inference.
+                if vram_gb >= 4.0:
+                    return "amd_gpu", gpu_name, vram_gb
+            else:
+                # NVIDIA CUDA backend
+                if vram_gb >= 8.0:
+                    return "nvidia_gpu", gpu_name, vram_gb
     except ImportError:
         pass
 
@@ -107,6 +120,15 @@ def is_llama_cpp_available() -> bool:
         return False
 
 
+def _ctranslate2_has_gpu() -> bool:
+    """Return True if the installed CTranslate2 build can use a GPU (CUDA or ROCm)."""
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
 def get_auto_defaults() -> dict:
     """Return a dict of recommended default settings for the current hardware.
 
@@ -136,6 +158,28 @@ def get_auto_defaults() -> dict:
             "recommended_translation_model": "llama.cpp CUDA (lokalny)" if is_llama_cpp_available() else "NLLB (lokalny)",
             "llama_cpp_n_gpu_layers": -1,      # offload all layers to GPU
             "profile_label": f"NVIDIA GPU ({get_gpu_name()}, {vram:.1f} GB VRAM)",
+        }
+    elif profile == "amd_gpu":
+        # AMD GPU via ROCm/HIP.  PyTorch built with ROCm maps device "cuda" to
+        # the AMD GPU transparently, so HF summarization (pure PyTorch)
+        # can use "cuda" here.
+        #
+        # faster-whisper and NLLB run on CTranslate2.  The PyPI wheels are
+        # NVIDIA CUDA / CPU only; the ROCm wheels from the CTranslate2 GitHub
+        # releases (rocm-python-wheels-*.zip) also report AMD GPUs as "cuda".
+        # Use the GPU only when the installed CTranslate2 actually sees one.
+        ct2_gpu = _ctranslate2_has_gpu()
+        ct2_device = "cuda" if ct2_gpu else "cpu"
+        ct2_label = "GPU" if ct2_gpu else "CPU (CTranslate2 bez ROCm)"
+        whisper_variant = "large-v3" if vram >= 16 else "large-v3-turbo"
+        return {
+            "whisper_device": ct2_device,
+            "whisper_variant": whisper_variant,
+            "nllb_device": ct2_device,
+            "hf_summary_device": "cuda",        # PyTorch ROCm build handles this fine
+            "recommended_translation_model": "llama.cpp ROCm (lokalny)" if is_llama_cpp_available() else "NLLB (lokalny)",
+            "llama_cpp_n_gpu_layers": -1,      # offload all layers to GPU
+            "profile_label": f"AMD GPU ROCm ({get_gpu_name()}, {vram:.1f} GB pamięci) — Whisper/NLLB: {ct2_label}, streszczenia: GPU",
         }
     else:
         return {

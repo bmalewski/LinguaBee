@@ -119,7 +119,13 @@ class WhisperTranscription:
         if model_key not in whisper_model_cache:
             self.status_signal.emit(f"Ładowanie modelu Whisper '{self.config.whisper_variant}' do '{models_dir}' (może potrwać)...", "info")
             if self._is_stopped(): return None, None, None
-            compute_type = "int8" if self.config.whisper_device == "cpu" else "float32"
+            if self.config.whisper_device == "cpu":
+                compute_type = "int8"
+            elif getattr(torch.version, "hip", None):
+                # AMD ROCm: float16 ~2.4x szybszy od float32 przy tym samym tekście (pomiar na gfx1151/gfx1201)
+                compute_type = "float16"
+            else:
+                compute_type = "float32"
             # Best-effort login to HF in case model files require authenticated access.
             try:
                 login_huggingface()

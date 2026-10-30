@@ -1,14 +1,22 @@
-"""llama-cpp-python translation backend for NVIDIA GPU (CUDA) and CPU.
+"""llama-cpp-python translation backend for NVIDIA GPU (CUDA), AMD GPU (ROCm/Vulkan) and CPU.
 
 Uses llama-cpp-python to run GGUF-quantised models locally.
 With n_gpu_layers=-1 all layers are offloaded to the GPU — ideal for
-an RTX 3090 Ti (24 GB VRAM).
+an RTX 3090 Ti (24 GB VRAM) or AMD Ryzen AI Max+ 395 (RDNA 3.5 iGPU, large unified memory).
 
-Install dependency:
+Install dependency (choose ONE build variant):
+
     # CPU only:
     pip install llama-cpp-python
-    # CUDA (compile with GPU support):
+
+    # NVIDIA CUDA:
     CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+    # AMD ROCm/HIP (Linux, ROCm 6.x zainstalowany):
+    CMAKE_ARGS="-DGGML_HIPBLAS=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+    # AMD Vulkan (Windows lub Linux jako fallback bez ROCm):
+    CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
 
 Default model (downloaded automatically on first run via HuggingFace):
     bartowski/gemma-3-12b-it-GGUF  Q4_K_M  (~7.5 GB)
@@ -55,7 +63,9 @@ def _get_llama(model_path: str, n_gpu_layers: int = -1, n_ctx: int = _CONTEXT_SI
             raise ImportError(
                 "llama-cpp-python nie jest zainstalowane.\n"
                 "CPU: pip install llama-cpp-python\n"
-                "CUDA: CMAKE_ARGS=\"-DGGML_CUDA=on\" pip install llama-cpp-python --force-reinstall"
+                "CUDA (NVIDIA): CMAKE_ARGS=\"-DGGML_CUDA=on\" pip install llama-cpp-python --force-reinstall\n"
+                "ROCm/HIP (AMD Linux): CMAKE_ARGS=\"-DGGML_HIPBLAS=on\" pip install llama-cpp-python --force-reinstall\n"
+                "Vulkan (AMD Windows): CMAKE_ARGS=\"-DGGML_VULKAN=on\" pip install llama-cpp-python --force-reinstall"
             ) from e
         llm = Llama(
             model_path=model_path,

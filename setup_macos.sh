@@ -37,6 +37,9 @@ fi
 echo "Aktualizacja pip..."
 "$VENV_PY" -m pip install --upgrade pip
 
+echo "Wykrywanie GPU i instalacja właściwego PyTorch (CUDA/ROCm/Apple Silicon/CPU)..."
+"$VENV_PY" install_pytorch.py
+
 echo "Instalacja zależności z requirements.txt..."
 "$VENV_PY" -m pip install -r requirements.txt
 

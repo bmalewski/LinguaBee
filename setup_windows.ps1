@@ -52,6 +52,9 @@ try {
         Write-Host "Aktualizacja pip..." -ForegroundColor Green
         & $venvPython -m pip install --upgrade pip
 
+        Write-Host "Wykrywanie GPU i instalacja właściwego PyTorch (CUDA/ROCm/CPU)..." -ForegroundColor Green
+        & $venvPython install_pytorch.py
+
         Write-Host "Instalacja zależności z requirements.txt..." -ForegroundColor Green
         & $venvPython -m pip install -r requirements.txt
 

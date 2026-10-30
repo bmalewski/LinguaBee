@@ -28,9 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # 4. Kopiowanie i instalacja zależności Python
-# Kopiujemy najpierw ten plik, aby wykorzystać cache Dockera
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Kopiujemy najpierw te pliki, aby wykorzystać cache Dockera
+COPY requirements.txt install_pytorch.py .
+# Kontener bez przekazanego GPU nie wykryje NVIDIA/AMD, więc instalator
+# automatycznie dobierze lekki build CPU-only.
+RUN python install_pytorch.py \
+    && pip install --no-cache-dir -r requirements.txt
 
 # 5. Kopiowanie reszty kodu aplikacji
 COPY . .

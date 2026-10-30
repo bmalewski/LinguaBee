@@ -24,7 +24,7 @@ Poniżej znajdziesz **kompletną instrukcję instalacji na Windows i macOS**.
 ### Opcjonalne (zależnie od funkcji)
 - Ollama (lokalne modele LLM)
 - Node.js (pomaga `yt-dlp` przy ekstrakcji YouTube)
-- GPU + CUDA (Windows, jeśli chcesz akcelerację)
+- GPU do akceleracji: NVIDIA (CUDA), AMD (ROCm, np. Ryzen AI Max+ / Radeon RDNA2-4) lub Apple Silicon (MPS)
 
 ---
 
@@ -53,6 +53,30 @@ Poniżej znajdziesz **kompletną instrukcję instalacji na Windows i macOS**.
 ### Sterowniki NVIDIA + CUDA (opcjonalnie)
 - Sterowniki NVIDIA: https://www.nvidia.com/Download/index.aspx
 - CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+
+### Sterowniki AMD + ROCm (opcjonalnie)
+- Sterowniki AMD Adrenalin: https://www.amd.com/en/products/software/adrenalin.html
+- Wsparcie ROCm dla PyTorch (Windows i Linux) jest wykrywane i instalowane automatycznie
+  przez skrypt `install_pytorch.py` (patrz niżej) - nie trzeba pobierać niczego ręcznie.
+- Przy kilku kartach AMD (np. Radeon 8060S + zewnętrzny Radeon AI PRO R9700) skrypt instaluje
+  kod dla wszystkich wykrytych kart. LinguaBee domyślnie używa pierwszej karty;
+  inną wybierzesz zmienną środowiskową przed uruchomieniem, np. `$env:HIP_VISIBLE_DEVICES="1"`.
+
+### Whisper i NLLB na karcie AMD (CTranslate2 z ROCm, opcjonalnie)
+Transkrypcja (faster-whisper) i tłumaczenie NLLB działają na CTranslate2. Wersja z PyPI obsługuje
+tylko NVIDIA i CPU, więc na AMD domyślnie liczą na procesorze. Aby przenieść je na kartę AMD:
+1. Pobierz `rocm-python-wheels-Windows.zip` (lub `-Linux.zip`) z
+   https://github.com/OpenNMT/CTranslate2/releases (testowane: 4.8.4, gfx1151 i gfx1201).
+2. Zainstaluj plik pasujący do wersji Pythona, np. dla 3.12:
+   `pip install --no-deps --force-reinstall ctranslate2-4.8.4-cp312-cp312-win_amd64.whl`
+3. Uruchom LinguaBee - profil AMD sam wykryje, że CTranslate2 widzi kartę, i ustawi na niej
+   Whisper oraz NLLB (Whisper w trybie float16).
+
+Uwaga: te paczki korzystają z bibliotek ROCm 7 (`amdhip64_7.dll`) instalowanych razem z PyTorch.
+Przy nowszym ROCm sprawdź działanie (`python -c "import ctranslate2; print(ctranslate2.get_cuda_device_count())"`);
+gdy pokaże 0, LinguaBee automatycznie zostanie przy procesorze.
+
+Pomiar (Ryzen AI Max+ 395, large-v3, 5 min nagrania): CPU ok. 260 s, karta AMD float16 ok. 50 s.
 
 ---
 
@@ -107,10 +131,18 @@ Jeśli PowerShell blokuje skrypty:
 ### Krok 6: Zaktualizuj pip
 - `python -m pip install --upgrade pip`
 
-### Krok 7: Zainstaluj zależności
+### Krok 7: Zainstaluj PyTorch dopasowany do Twojego sprzętu
+- `python install_pytorch.py`
+
+Skrypt wykrywa GPU (NVIDIA/AMD) i instaluje właściwy build PyTorch:
+- NVIDIA GPU -> PyTorch CUDA,
+- AMD GPU (np. Ryzen AI Max+ 395, Radeon RX 6000/7000/9000) -> PyTorch ROCm,
+- brak GPU -> lekki PyTorch CPU-only.
+
+### Krok 8: Zainstaluj pozostałe zależności
 - `pip install -r requirements.txt`
 
-### Krok 8: Uruchom aplikację
+### Krok 9: Uruchom aplikację
 - `python main.py`
 
 ---
@@ -155,10 +187,15 @@ Weryfikacja:
 ### Krok 6: Zaktualizuj pip
 - `python -m pip install --upgrade pip`
 
-### Krok 7: Zainstaluj zależności
+### Krok 7: Zainstaluj PyTorch dopasowany do Twojego sprzętu
+- `python install_pytorch.py`
+
+Na Apple Silicon skrypt zainstaluje standardowy build PyTorch (obsługa Metal/MPS wbudowana).
+
+### Krok 8: Zainstaluj pozostałe zależności
 - `pip install -r requirements.txt`
 
-### Krok 8: Uruchom aplikację
+### Krok 9: Uruchom aplikację
 - `python main.py`
 
 ---
@@ -182,8 +219,14 @@ Zainstaluj FFmpeg i upewnij się, że binarka jest w `PATH`.
 - zamknij przeglądarkę przy ekstrakcji cookies,
 - doinstaluj Node.js.
 
-### Problemy z GPU/CUDA
-- sprawdź sterowniki NVIDIA,
+### Problemy z GPU/CUDA/ROCm
+- sprawdź sterowniki NVIDIA (CUDA) lub AMD Adrenalin (ROCm),
+- upewnij się, że uruchomiłeś `python install_pytorch.py` PRZED `pip install -r requirements.txt`
+  (w innym wypadku pip może doinstalować domyślny, niewłaściwy build PyTorch),
+- sprawdź wykryty profil: `python install_pytorch.py --dry-run`,
+- jeśli Twój model GPU AMD nie zostanie automatycznie rozpoznany, zainstaluj ręcznie
+  właściwy target: `python install_pytorch.py --force rocm --gfx gfx1151` (pełna lista:
+  `python install_pytorch.py --list-targets`),
 - dla CPU projekt też działa (wolniej).
 
 ## 7) Aktualizacja projektu
