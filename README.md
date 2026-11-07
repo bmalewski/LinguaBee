@@ -11,6 +11,77 @@ Poniżej znajdziesz **kompletną instrukcję instalacji na Windows i macOS**.
 
 ---
 
+## 0) Windows: instalator (zalecane)
+
+Najprostszy sposób instalacji na Windows 10/11 (64-bit), podobny do ComfyUI Desktop: mały
+instalator (ok. 20 MB) pobiera resztę z internetu do jednego, wybranego folderu.
+Nie trzeba instalować Pythona, Gita ani FFmpeg i nie są potrzebne uprawnienia administratora.
+
+### Instalacja
+1. Pobierz `LinguaBee-<wersja>-Setup.exe` (GitHub → Releases) i uruchom.
+   Instalator nie jest podpisany cyfrowo, więc Windows może pokazać ostrzeżenie SmartScreen:
+   kliknij **Więcej informacji → Uruchom mimo to**.
+2. Wybierz folder, np. `C:\LinguaBee` albo `D:\LinguaBee` (najlepiej krótka ścieżka na szybkim
+   dysku wewnętrznym z dużą ilością miejsca; nie Program Files i nie OneDrive). Z wolnego dysku
+   zewnętrznego (USB) program też działa, ale uruchamia się nawet kilka minut.
+3. Wybierz kartę graficzną (instalator podpowiada wykrytą):
+   - **NVIDIA (CUDA)** – karty GeForce/RTX, pobieranie ok. 4 GB, na dysku ok. 8,5 GB,
+   - **AMD (ROCm)** – Radeon RX 7000/9000, Ryzen AI Max (eksperymentalnie; sterownik Adrenalin 26.2.2+),
+   - **Tylko procesor (CPU)** – działa na każdym komputerze (wolniej), pobieranie ok. 1 GB,
+     na dysku ok. 4,5 GB.
+4. Instalator pobierze Pythona 3.12, PyTorch dla wybranej karty, biblioteki (dokładnie
+   przetestowane wersje, sprawdzane sumami SHA-256), FFmpeg i opcjonalnie Deno (YouTube).
+   Zależnie od łącza trwa to od kilku do kilkunastu minut.
+5. Uruchamiaj program skrótem **LinguaBee** w menu Start lub na pulpicie.
+
+Modele (np. Whisper) pobierają się przy pierwszym użyciu – też do folderu instalacji.
+
+### Co jest w folderze instalacji
+| Folder | Zawartość |
+|---|---|
+| `app\` | kod programu (podmieniany przy aktualizacji) |
+| `python\` | Python i biblioteki (w tym PyTorch) |
+| `bin\` | `ffmpeg.exe`, `ffprobe.exe`, `uv.exe`, `deno.exe` |
+| `models\` | wszystkie modele (Whisper, NLLB, HuggingFace) |
+| `output\` | wyniki: TXT, DOCX, SRT, pobrane audio |
+| `user\` | ustawienia, prompty, logi (`user\logs`), token HuggingFace |
+| `cache\` | pliki tymczasowe bibliotek (można usunąć) |
+
+**Przeniesienie** (także na inny dysk): przenieś cały folder, a potem uruchom instalator
+i wskaż nowe miejsce – nic nie jest pobierane ponownie, a skróty i deinstalacja zaczną
+wskazywać nowy folder. Bez instalatora pod ręką wystarczy `Napraw instalacje.bat` w nowym
+miejscu: poprawi skróty (deinstalację z Ustawień Windows naprawi dopiero instalator).
+
+Modele i wyniki można trzymać gdzie indziej – dopisz do `install.json`
+np. `"models_dir": "E:\\Modele"` albo `"output_dir": "D:\\Wyniki"`.
+
+### Naprawa, aktualizacja, deinstalacja
+- **Napraw instalację** (menu Start → LinguaBee albo `Napraw instalacje.bat`): sprawdza Pythona,
+  biblioteki (także czy ich pliki nie zostały usunięte lub uszkodzone), FFmpeg i Deno i pobiera
+  tylko to, czego brakuje. Program musi być wtedy zamknięty. Zmiana karty, np.:
+  `"Napraw instalacje.bat" -Gpu cpu` (`auto`, `nvidia`, `amd`, `cpu`).
+- **Aktualizacja:** uruchom nowszy instalator i wskaż ten sam folder. Kod zostanie podmieniony,
+  biblioteki uzupełnione (pobierane jest tylko to, co się zmieniło), a modele, wyniki
+  i ustawienia zostają. Naprawa i aktualizacja instalują też najnowszy yt-dlp (YouTube często
+  zmienia sposób udostępniania filmów).
+- **Deinstalacja:** Ustawienia → Aplikacje → LinguaBee. Deinstalator zapyta, czy usunąć też
+  modele, wyniki i ustawienia (domyślnie zostają).
+- Gdy coś nie działa: menu Start → **LinguaBee (konsola)** pokazuje wszystkie komunikaty,
+  a przebieg instalacji jest w `user\logs\install.log`.
+
+### Budowanie instalatora (dla autora)
+1. `powershell -ExecutionPolicy Bypass -File packaging\installer\compile_locks.ps1` –
+   przypięte listy pakietów `requirements\windows-{nvidia,cpu,amd}.txt` z działającego `venv`
+   (po zmianie `requirements.txt` albo aktualizacji bibliotek).
+2. `powershell -ExecutionPolicy Bypass -File packaging\installer\build_installer.ps1` –
+   `dist_installer\LinguaBee-<wersja>-Setup.exe` (wersja z `APP_VERSION` w `config.py`;
+   wymaga Inno Setup 6.7+). Przypięte pliki do pobrania (uv, FFmpeg, Deno, CTranslate2 ROCm)
+   są w `packaging\installer\downloads.json`.
+
+Instalacja ze źródeł (sekcje 1–8) pozostaje dla osób, które rozwijają program.
+
+---
+
 ## 1) Wymagania wstępne
 
 ### Obowiązkowe
@@ -84,12 +155,20 @@ Pomiar (Ryzen AI Max+ 395, large-v3, 5 min nagrania): CPU ok. 260 s, karta AMD f
 ## 3) Instalacja na Windows (krok po kroku)
 
 ### Szybka instalacja skryptem (Windows)
-W katalogu projektu uruchom PowerShell i wykonaj:
-- `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1`
+Po zainstalowaniu Pythona 3.12 i Gita (kroki 1–2 niżej) i pobraniu projektu (krok 4)
+kliknij dwukrotnie **`setup_windows.bat`** w katalogu projektu. Skrypt:
+- tworzy środowisko `.venv` (albo używa istniejącego `venv` / `.venv`),
+- instaluje PyTorch dobrany do karty graficznej i pozostałe biblioteki,
+- tworzy skrót **LinguaBee** na pulpicie i w menu Start.
+
+To samo z PowerShella: `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1`
 
 Opcjonalnie:
 - pomiń tworzenie venv: `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -SkipVenv`
 - pomiń instalację pakietów: `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -SkipInstall`
+- bez skrótu na pulpicie: `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -NoShortcut`
+
+Potem uruchamiaj program dwuklikiem — patrz sekcja 8.
 
 ### Krok 1: Zainstaluj Python 3.12.10
 1. Pobierz instalator: https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe
@@ -145,6 +224,8 @@ Skrypt wykrywa GPU (NVIDIA/AMD) i instaluje właściwy build PyTorch:
 
 ### Krok 9: Uruchom aplikację
 - `python main.py`
+- albo bez PowerShella: dwuklik w `LinguaBee.bat`; skrót z ikoną na pulpicie utworzy
+  `Utworz skrot na pulpicie.bat` (patrz sekcja 8)
 
 ---
 
@@ -240,8 +321,20 @@ W katalogu projektu:
 
 ## 8) Uruchomienie (skrót)
 
+### Windows: dwuklikiem, bez PowerShella
+- **`LinguaBee.bat`** — uruchamia program bez okna konsoli (sam znajduje `venv` / `.venv`).
+- **Skrót LinguaBee** na pulpicie i w menu Start (z ikoną) — tworzy go `setup_windows.bat`
+  albo **`Utworz skrot na pulpicie.bat`**. Ze skrótu program startuje bez migającej konsoli.
+- **`LinguaBee - konsola.bat`** — to samo, ale z oknem konsoli, które zostaje otwarte po
+  zamknięciu programu. Użyj go, gdy coś nie działa: widać wszystkie komunikaty i błędy.
+
+Przy starcie bez konsoli komunikaty i błędy trafiają do pliku `logs\linguabee.log` w katalogu
+projektu. Jeśli program nie wystartuje, pojawi się okno z opisem błędu i ścieżką do tego pliku.
+
+### Z wiersza poleceń (Windows, macOS)
 Po aktywacji `.venv`:
 - `python main.py`
+- `python main.py --selftest` — sprawdza biblioteki, ffmpeg i kartę graficzną
 
 ---
 

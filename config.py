@@ -10,13 +10,18 @@ import json
 # Dwa rodzaje ścieżek:
 # - zasoby tylko do odczytu (ikony, stylesheet, seedy promptów, wbudowane binarki):
 #   resource_path(...) — w spakowanej aplikacji (PyInstaller) wskazuje do sys._MEIPASS,
-#   ze źródeł do katalogu projektu;
-# - dane użytkownika (wyniki, modele, ustawienia, szablony promptów):
-#   w spakowanej aplikacji katalogi standardowe systemu (macOS: ~/Documents/LinguaBee
-#   i ~/Library/Application Support/LinguaBee), ze źródeł — jak dotąd obok tego pliku.
+#   poza nią do katalogu z kodem;
+# - dane użytkownika (wyniki, modele, ustawienia, szablony promptów, cache):
+#   * ze źródeł (python main.py, LinguaBee.bat w repozytorium) — jak dotąd obok kodu;
+#   * w instalacji z instalatora Windows (kod w <root>\app, obok plik install.json) —
+#     wszystko w <root>: models\, output\, user\ (ustawienia, prompty, logi), cache\, bin\;
+#   * w spakowanej aplikacji — katalogi standardowe systemu (macOS: ~/Documents/LinguaBee
+#     i ~/Library/Application Support/LinguaBee).
 import shutil
 
 APP_NAME = "LinguaBee"
+APP_VERSION = "1.1.0"  # jedyne źródło numeru wersji (instalator Windows, selftest)
+INSTALL_MARKER = "install.json"
 _SOURCE_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -31,8 +36,66 @@ def resource_path(*parts) -> str:
     return os.path.join(root or _SOURCE_ROOT, *parts)
 
 
+def _find_install_root() -> Optional[str]:
+    """Katalog główny instalacji z instalatora Windows albo None (źródła, spakowana aplikacja).
+
+    Instalator kładzie kod w <root>\\app, a obok niego install.json. Zmienna środowiskowa
+    LINGUABEE_HOME wymusza katalog główny (np. do testów).
+    """
+    forced = os.environ.get("LINGUABEE_HOME")
+    if forced:
+        return os.path.abspath(forced)
+    if is_frozen():
+        return None
+    parent = os.path.dirname(_SOURCE_ROOT)
+    if os.path.isfile(os.path.join(parent, INSTALL_MARKER)):
+        return parent
+    return None
+
+
+def _load_install_info(root: Optional[str]) -> dict:
+    """Zawartość install.json (wariant, wersje, opcjonalne models_dir / output_dir)."""
+    if not root:
+        return {}
+    try:
+        # utf-8-sig: PowerShell 5.1 zapisuje UTF-8 z BOM
+        with open(os.path.join(root, INSTALL_MARKER), "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+install_root = _find_install_root()
+install_info = _load_install_info(install_root)
+
+
+def is_installed() -> bool:
+    """True, gdy program działa z instalacji (wszystkie dane w jednym folderze)."""
+    return install_root is not None
+
+
+def run_mode() -> str:
+    if install_root:
+        return "instalacja"
+    if is_frozen():
+        return "spakowana aplikacja"
+    return "źródła"
+
+
+def _install_path(key: str, default_name: str) -> str:
+    """Ścieżka w folderze instalacji. install.json może ją przenieść gdzie indziej
+    (np. "models_dir": "E:\\\\Modele") — odpowiednik extra_model_paths.yaml z ComfyUI."""
+    custom = install_info.get(key)
+    if isinstance(custom, str) and custom.strip():
+        return os.path.abspath(os.path.expandvars(custom.strip()))
+    return os.path.join(install_root, default_name)
+
+
 def _user_data_root() -> str:
-    """Katalog zapisu dla modeli, ustawień i szablonów promptów."""
+    """Katalog zapisu dla ustawień i szablonów promptów (oraz modeli poza instalacją)."""
+    if install_root:
+        return os.path.join(install_root, "user")
     if not is_frozen():
         return _SOURCE_ROOT
     if sys.platform == "darwin":
@@ -44,6 +107,8 @@ def _user_data_root() -> str:
 
 def _user_output_root() -> str:
     """Katalog, do którego trafiają wyniki (TXT/DOCX/SRT, pobrane audio)."""
+    if install_root:
+        return _install_path("output_dir", "output")
     if not is_frozen():
         return os.path.join(_SOURCE_ROOT, "output")
     return os.path.join(os.path.expanduser("~"), "Documents", APP_NAME)
@@ -60,11 +125,13 @@ def _safe_makedirs(path: str) -> None:
 base_path = os.path.dirname(sys.executable) if is_frozen() else _SOURCE_ROOT
 data_root = _user_data_root()
 downloads_dir = _user_output_root()
-models_dir = os.path.join(data_root, "models")
+models_dir = _install_path("models_dir", "models") if install_root else os.path.join(data_root, "models")
 prompts_dir = os.path.join(data_root, "prompts")
 settings_file = os.path.join(data_root, "user_settings.json")
 icons_dir = resource_path("icons")
-bin_dir = resource_path("bin")  # wbudowane ffmpeg/ffprobe (tylko w spakowanej aplikacji)
+# ffmpeg/ffprobe (i uv, deno): w instalacji <root>\bin, w spakowanej aplikacji wbudowane
+bin_dir = os.path.join(install_root, "bin") if install_root else resource_path("bin")
+cache_dir = os.path.join(install_root, "cache") if install_root else os.path.join(data_root, "cache")
 
 
 def prompts_subdir(*parts) -> str:
@@ -74,13 +141,15 @@ def prompts_subdir(*parts) -> str:
     return path
 
 
-def _seed_prompts_if_frozen() -> None:
-    """Pierwsze uruchomienie spakowanej aplikacji: kopiuje dołączone szablony promptów
-    do katalogu użytkownika. Nigdy nie nadpisuje istniejących plików."""
-    if not is_frozen():
+def _seed_prompts() -> None:
+    """Spakowana aplikacja i instalacja: kopiuje dołączone szablony promptów do katalogu
+    użytkownika (user\\prompts), żeby aktualizacja kodu ich nie nadpisała. Nigdy nie
+    nadpisuje istniejących plików."""
+    if not (is_frozen() or install_root):
         return
     src_root = resource_path("prompts")
-    if not os.path.isdir(src_root):
+    if not os.path.isdir(src_root) or os.path.normcase(os.path.abspath(src_root)) == os.path.normcase(
+            os.path.abspath(prompts_dir)):
         return
     for dirpath, _dirs, files in os.walk(src_root):
         rel = os.path.relpath(dirpath, src_root)
@@ -98,9 +167,46 @@ def _seed_prompts_if_frozen() -> None:
                 pass
 
 
+_dll_directories = []  # uchwyty os.add_dll_directory (muszą żyć do końca procesu)
+
+
+def _configure_install_environment() -> None:
+    """Instalacja: modele, cache i narzędzia wyłącznie w folderze instalacji.
+
+    Musi zadziałać przed pierwszym importem huggingface_hub / torch / yt_dlp (main.py importuje
+    config jako pierwszy). Procesy potomne (np. runner audio) dziedziczą te zmienne.
+    Wartości ustawione wcześniej w środowisku mają pierwszeństwo.
+    """
+    if not install_root:
+        return
+    for key, value in {
+        "HF_HOME": os.path.join(data_root, "huggingface"),  # token HuggingFace
+        "HF_HUB_CACHE": models_dir,  # modele HF w tym samym folderze co Whisper i NLLB
+        "TORCH_HOME": os.path.join(cache_dir, "torch"),
+        "XDG_CACHE_HOME": cache_dir,  # m.in. cache yt-dlp
+        "MPLCONFIGDIR": os.path.join(cache_dir, "matplotlib"),
+        "NUMBA_CACHE_DIR": os.path.join(cache_dir, "numba"),
+        "DENO_DIR": os.path.join(cache_dir, "deno"),
+    }.items():
+        os.environ.setdefault(key, value)
+    if os.path.isdir(bin_dir):
+        path = os.environ.get("PATH", "")
+        if os.path.normcase(bin_dir) not in [os.path.normcase(p) for p in path.split(os.pathsep)]:
+            os.environ["PATH"] = bin_dir + os.pathsep + path
+        if hasattr(os, "add_dll_directory"):  # DLL-e FFmpeg dla torchcodec
+            try:
+                _dll_directories.append(os.add_dll_directory(bin_dir))
+            except OSError:
+                pass
+
+
+# pyannote.audio domyślnie wysyła anonimowe statystyki użycia; wyłączamy (można nadpisać zmienną).
+os.environ.setdefault("PYANNOTE_METRICS_ENABLED", "false")
+
 for _d in (downloads_dir, models_dir, prompts_dir):
     _safe_makedirs(_d)
-_seed_prompts_if_frozen()
+_configure_install_environment()
+_seed_prompts()
 
 
 def load_settings() -> dict:

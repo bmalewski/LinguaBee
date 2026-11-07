@@ -42,6 +42,19 @@ except Exception:
     _HW_PROFILE = "cpu"
     _HW_DEFAULTS = {}
 
+# Karty AMD (ROCm) odczytane w osobnym procesie; None = jeszcze nie sprawdzano.
+_AMD_GPUS = None
+
+
+def prefetch_hardware_info():
+    """Wywoływane w tle przy ekranie startowym (main.py), zanim powstanie okno.
+
+    Przy PyTorch z ROCm lista kart wymaga osobnego procesu z kolejnym importem PyTorch
+    (kilka sekund); odczytana tutaj nie blokuje potem tworzenia okna.
+    """
+    if TORCH_AVAILABLE and getattr(torch.version, "hip", None):
+        MainWindow._list_amd_gpus()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -183,6 +196,17 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _list_amd_gpus():
+        """Lista (indeks HIP, nazwa) wszystkich kart AMD; zapamiętywana na czas działania programu.
+
+        Zwykle odczytana już w tle przy ekranie startowym (prefetch_hardware_info).
+        """
+        global _AMD_GPUS
+        if _AMD_GPUS is None:
+            _AMD_GPUS = MainWindow._query_amd_gpus()
+        return list(_AMD_GPUS)
+
+    @staticmethod
+    def _query_amd_gpus():
         """Lista (indeks HIP, nazwa) wszystkich kart AMD, także ukrytych przez HIP_VISIBLE_DEVICES.
 
         Sprawdzane w osobnym procesie, bo w tym widoczna jest tylko jedna karta.
@@ -1285,15 +1309,24 @@ class MainWindow(QMainWindow):
             except Exception:
                 self.append_log(f"Output folder present: {downloads_dir}", "info")
 
-        # Key library versions
+        # Key library versions: z metadanych pakietów, bez importu bibliotek (import
+        # ctranslate2/faster_whisper trwałby przy tworzeniu okna kilka sekund).
+        from importlib import metadata as importlib_metadata
         libs = ['torch', 'ctranslate2', 'httpx', 'faster_whisper']
         for lib in libs:
             try:
-                m = importlib.import_module(lib)
-                ver = getattr(m, '__version__', None) or getattr(m, 'VERSION', None) or str(m)
-                self.append_log(f"Lib {lib}: {ver}", "info")
+                ver = importlib_metadata.version(lib)
             except Exception:
-                self.append_log(f"Lib {lib}: not installed", "warning")
+                ver = None
+            if ver is None:
+                # Spakowana aplikacja może nie mieć metadanych pakietów: wersja z modułu.
+                try:
+                    m = importlib.import_module(lib)
+                    ver = getattr(m, '__version__', None) or getattr(m, 'VERSION', None) or str(m)
+                except Exception:
+                    self.append_log(f"Lib {lib}: not installed", "warning")
+                    continue
+            self.append_log(f"Lib {lib}: {ver}", "info")
 
         # Hardware profile
         try:

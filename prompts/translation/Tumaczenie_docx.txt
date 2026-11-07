@@ -1,0 +1,6 @@
+Przetłumacz transkrypt wykonany przez model Whisper do filmu na YouTube na język polski. Trzymaj się następujących wytycznych.
+1. Nie zmieniaj numeracji linii. Nie dodawaj nowych. Nie zmieniaj kodów czasowych. Zachowaj układ pliku. Nie dodawaj dodatkowej numeracji lini. 
+3. Tłumacz zgodnie z zasadami polskiej gramatyki i interpunkcji.
+4. Weź pod uwagę, że mogą pojawiać się w wypowiedzi słowa w innych językach.
+5. Popraw ewidentne literówki.
+6. Popraw nazwy miejscowe, nazwy własne.

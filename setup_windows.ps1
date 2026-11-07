@@ -1,6 +1,7 @@
-param(
+﻿param(
     [switch]$SkipVenv,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$NoShortcut
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,21 +32,24 @@ try {
         exit 1
     }
 
-    # 3) venv
+    # 3) venv: istniejące venv\ albo .venv\; nowe tworzymy jako .venv\
+    $venvDir = @('venv', '.venv') | Where-Object { Test-Path (Join-Path $_ 'Scripts\python.exe') } | Select-Object -First 1
     if (-not $SkipVenv) {
-        if (-not (Test-Path ".venv")) {
-            Write-Host "Tworzenie środowiska .venv..." -ForegroundColor Green
-            Invoke-Expression "$pyCmd -m venv .venv"
+        if (-not $venvDir) {
+            $venvDir = '.venv'
+            Write-Host "Tworzenie środowiska $venvDir..." -ForegroundColor Green
+            Invoke-Expression "$pyCmd -m venv $venvDir"
         } else {
-            Write-Host "Środowisko .venv już istnieje." -ForegroundColor DarkYellow
+            Write-Host "Środowisko $venvDir już istnieje." -ForegroundColor DarkYellow
         }
     }
+    if (-not $venvDir) { $venvDir = '.venv' }
 
     # 4) install deps
     if (-not $SkipInstall) {
-        $venvPython = Join-Path (Get-Location) ".venv\Scripts\python.exe"
+        $venvPython = Join-Path (Get-Location) "$venvDir\Scripts\python.exe"
         if (-not (Test-Path $venvPython)) {
-            Write-Host "Brak .venv\Scripts\python.exe. Uruchom ponownie bez -SkipVenv." -ForegroundColor Red
+            Write-Host "Brak $venvDir\Scripts\python.exe. Uruchom ponownie bez -SkipVenv." -ForegroundColor Red
             exit 1
         }
 
@@ -62,11 +66,22 @@ try {
         & $venvPython -m pip install -U yt-dlp
     }
 
+    # 5) skrót na pulpicie i w menu Start
+    if (-not $NoShortcut) {
+        Write-Host "Tworzenie skrótu LinguaBee na pulpicie i w menu Start..." -ForegroundColor Green
+        try {
+            & (Join-Path $PSScriptRoot 'packaging\windows\create_shortcut.ps1') -Root $PSScriptRoot
+        } catch {
+            Write-Host "Nie udało się utworzyć skrótu: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
     Write-Host ""
     Write-Host "Setup zakończony." -ForegroundColor Cyan
-    Write-Host "Uruchomienie aplikacji:" -ForegroundColor Cyan
-    Write-Host "  .\.venv\Scripts\Activate.ps1"
-    Write-Host "  python main.py"
+    Write-Host "Uruchamianie LinguaBee:" -ForegroundColor Cyan
+    Write-Host "  - dwuklik w plik LinguaBee.bat albo w skrót LinguaBee na pulpicie / w menu Start"
+    Write-Host "  - LinguaBee - konsola.bat: to samo, ale z oknem komunikatów (gdy coś nie działa)"
+    Write-Host "  - ręcznie: .\$venvDir\Scripts\Activate.ps1, potem python main.py"
     Write-Host ""
     Write-Host "Jeśli brakuje ffmpeg, pobierz: https://www.gyan.dev/ffmpeg/builds/" -ForegroundColor Yellow
     Write-Host "Jeśli masz problemy z YouTube, doinstaluj Node.js: https://nodejs.org/en/download" -ForegroundColor Yellow

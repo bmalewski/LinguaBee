@@ -1,25 +1,39 @@
 import os
 from pathlib import Path
 from huggingface_hub import login, get_token
+from huggingface_hub import constants as hf_constants
+
+
+def _token_path() -> Path:
+    """Plik tokenu HuggingFace: $HF_HOME/token (w instalacji: user\\huggingface\\token),
+    a gdy HF_HOME nie jest ustawione — domyślnie ~/.cache/huggingface/token."""
+    return Path(hf_constants.HF_TOKEN_PATH)
 
 
 def get_hf_token() -> str | None:
     """
     Pobiera token Hugging Face ze zmiennej środowiskowej lub z pliku.
     """
-    token = os.getenv("HUGGING_FACE_HUB_TOKEN")
-    if token:
-        return token
+    for var in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        token = os.getenv(var)
+        if token and token.strip():
+            return token.strip()
 
-    # Sprawdź nową, domyślną lokalizację tokenu
-    token_path_cache = Path.home() / ".cache" / "huggingface" / "token"
-    if token_path_cache.exists():
-        return token_path_cache.read_text(encoding="utf-8").strip()
-
-    # Sprawdź starszą, przestarzałą lokalizację tokenu dla kompatybilności wstecznej
-    token_path_legacy = Path.home() / ".huggingface" / "token"
-    if token_path_legacy.exists():
-        return token_path_legacy.read_text(encoding="utf-8").strip()
+    # Bieżąca lokalizacja (respektuje HF_HOME), potem dawne lokalizacje - tylko do odczytu,
+    # żeby token z wcześniejszej instalacji nadal działał.
+    candidates = [
+        _token_path(),
+        Path.home() / ".cache" / "huggingface" / "token",
+        Path.home() / ".huggingface" / "token",
+    ]
+    for path in candidates:
+        try:
+            if path.exists():
+                token = path.read_text(encoding="utf-8").strip()
+                if token:
+                    return token
+        except OSError:
+            continue
 
     return None
 
@@ -30,9 +44,9 @@ def save_hf_token(token: str):
     """
     if not token or not token.strip():
         return
+    token = token.strip()
 
-    # Zapisz token w nowej, preferowanej lokalizacji
-    token_path = Path.home() / ".cache" / "huggingface" / "token"
+    token_path = _token_path()
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(token, encoding="utf-8")
     login(token)

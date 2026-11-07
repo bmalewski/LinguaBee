@@ -1,4 +1,9 @@
 # LinguaBee - pełne zależności runtime
+#
+# Instalator Windows nie korzysta z tego pliku bezpośrednio, tylko z przypiętych list
+# requirements/windows-<wariant>.txt (dokładne wersje + sumy SHA-256), generowanych z tego
+# pliku przez packaging/installer/compile_locks.ps1. Po zmianie zależności tutaj wygeneruj
+# je ponownie.
 
 # ---------------------------------------------------------------------------
 # PyTorch — WAŻNE: nie instaluj torch stąd bezpośrednio!
@@ -12,8 +17,9 @@
 # zainstalowany z właściwym backendem, więc pip go nie nadpisze.
 # ---------------------------------------------------------------------------
 
-# GUI
-PySide6
+# GUI — program używa tylko QtCore/QtGui/QtWidgets, więc wystarczy PySide6-Essentials
+# (pełny PySide6 dokłada PySide6-Addons: ok. 400 MB nieużywanych modułów)
+PySide6-Essentials
 
 # Core HTTP / API
 httpx

@@ -1,0 +1,4 @@
+# Skrypty wsadowe Windows muszą mieć końce linii CRLF (cmd.exe źle czyta pliki z samym LF),
+# także po edycji na macOS i w paczce ZIP pobranej z GitHuba.
+*.bat text eol=crlf
+*.cmd text eol=crlf

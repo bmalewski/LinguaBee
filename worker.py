@@ -1,30 +1,72 @@
 import os
+import threading
 
 from PySide6.QtCore import QThread, Signal
 
 from config import TranscriptionConfig, downloads_dir
-from downloader import download_audio
-from file_utils import is_video_file, extract_audio_from_video
-from whisper_transcription import WhisperTranscription, release_whisper_model
-from translation_manager import translate
-from summarization_manager import summarize
 from text_utils import format_transcript, add_missing_spaces
-from ollama_refiner import OllamaRefiner
-from correction_service import run_correction_step, _redact_api_key_in_message
-from correction_adapters import CorrectionAdapters
-from artifact_io_service import read_artifact, write_artifact
 from types import SimpleNamespace
 import re
 import time
 from whisper_paragrafizer import paragraphs_to_plaintext
-try:
-    from whisper_aligner import forced_align_refined_text
-except (ImportError, ModuleNotFoundError):
-    forced_align_refined_text = None
+
+# --- Biblioteki przetwarzania ładowane na żądanie ---
+# PyTorch, transformers, CTranslate2/faster-whisper, yt-dlp, PyAV i python-docx ładują się
+# kilka sekund, a po starcie komputera nawet ponad pół minuty. Okno programu ich nie
+# potrzebuje, więc importuje je dopiero load_backends(): w tle zaraz po pokazaniu okna
+# (main.py) i najpóźniej na początku run(). Wypełnia poniższe nazwy globalne modułu.
+download_audio = is_video_file = extract_audio_from_video = None
+WhisperTranscription = release_whisper_model = translate = summarize = None
+OllamaRefiner = run_correction_step = _redact_api_key_in_message = CorrectionAdapters = None
+read_artifact = write_artifact = forced_align_refined_text = None
+_backends_lock = threading.Lock()
+_backends_loaded = False
+
+
+def load_backends() -> None:
+    """Importuje moduły przetwarzania (raz na proces; można wołać z kilku wątków naraz)."""
+    global _backends_loaded, download_audio, is_video_file, extract_audio_from_video
+    global WhisperTranscription, release_whisper_model, translate, summarize, OllamaRefiner
+    global run_correction_step, _redact_api_key_in_message, CorrectionAdapters
+    global read_artifact, write_artifact, forced_align_refined_text
+    with _backends_lock:
+        if _backends_loaded:
+            return
+        from torchaudio_compat import ensure_audio_metadata
+        ensure_audio_metadata()  # przed pierwszym importem pyannote/whisperx (diaryzacja, wyrównanie)
+        from downloader import download_audio
+        from file_utils import is_video_file, extract_audio_from_video
+        from whisper_transcription import WhisperTranscription, release_whisper_model
+        from translation_manager import translate
+        from summarization_manager import summarize
+        from ollama_refiner import OllamaRefiner
+        from correction_service import run_correction_step, _redact_api_key_in_message
+        from correction_adapters import CorrectionAdapters
+        from artifact_io_service import read_artifact, write_artifact
+        try:
+            from whisper_aligner import forced_align_refined_text
+        except (ImportError, ModuleNotFoundError):
+            forced_align_refined_text = None
+        _backends_loaded = True
+
 
 # Global cache for models
 nllb_translator_cache = {}
 helsinki_translator_cache = {}
+
+
+def _console_python(executable: str) -> str:
+    """python.exe zamiast pythonw.exe (start bez konsoli: LinguaBee.bat, skrót).
+
+    Proces potomny uruchamiany z CREATE_NO_WINDOW dostaje wtedy ukrytą konsolę, którą
+    dziedziczą ffmpeg/ffprobe wywoływane przez pydub. Spod pythonw każde ich wywołanie
+    otwierałoby własne okno konsoli.
+    """
+    if os.path.basename(executable).lower() == 'pythonw.exe':
+        candidate = os.path.join(os.path.dirname(executable), 'python.exe')
+        if os.path.exists(candidate):
+            return candidate
+    return executable
 
 class TranscriptionThread(QThread):
     progress_signal = Signal(int)
@@ -103,6 +145,20 @@ class TranscriptionThread(QThread):
     def run(self):
         if self._is_stopped:
             self.finished_signal.emit("Proces zatrzymany przez użytkownika.", "info")
+            return
+
+        if not _backends_loaded:
+            self.status_signal.emit(
+                "Ładowanie bibliotek przetwarzania (PyTorch, Whisper, tłumaczenie)... "
+                "Pierwszy raz po starcie komputera może to potrwać kilkadziesiąt sekund.", "info")
+        try:
+            load_backends()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.finished_signal.emit(
+                f"Nie udało się załadować bibliotek przetwarzania: {e}. Szczegóły są w logu programu; "
+                "w wersji z instalatora pomaga zwykle „Napraw instalację”.", "error")
             return
 
         # Ustawienie cache dla managera tłumaczeń
@@ -262,7 +318,7 @@ class TranscriptionThread(QThread):
                                 cmd = [sys.executable, '--audio-runner', audio_path]
                             else:
                                 runner_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools', 'process_audio_runner.py')
-                                cmd = [sys.executable, runner_path, audio_path]
+                                cmd = [_console_python(sys.executable), runner_path, audio_path]
                             # Build config to pass to runner (respect GUI settings)
                             cfg_payload = {
                                 'enable_denoising': bool(getattr(self.config, 'enable_denoising', False)),
@@ -271,7 +327,17 @@ class TranscriptionThread(QThread):
                             }
                             self.status_signal.emit(f"Uruchamiam proces przetwarzania audio (izolowany): {os.path.basename(audio_path)}", "info")
                             # Run without text decoding so we can decode stdout as UTF-8 safely
-                            proc = subprocess.run(cmd, input=json.dumps(cfg_payload).encode('utf-8'), capture_output=True, text=False, timeout=timeout_secs)
+                            # Windows: bez widocznego okna konsoli (patrz _console_python).
+                            run_kwargs = {}
+                            if sys.platform.startswith('win'):
+                                run_kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                            proc = subprocess.run(cmd, input=json.dumps(cfg_payload).encode('utf-8'), capture_output=True, text=False, timeout=timeout_secs, **run_kwargs)
+                            # Komunikaty runnera (stderr) do konsoli albo logu - przydatne w diagnozie.
+                            if proc.stderr and sys.stderr is not None:
+                                try:
+                                    sys.stderr.write(proc.stderr.decode('utf-8', 'replace'))
+                                except Exception:
+                                    pass
 
                             if proc.returncode == 0:
                                 try:

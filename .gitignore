@@ -20,6 +20,7 @@ __pycache__/
 /downloads
 /output
 /models
+/logs
 /ollama_logs
 /ollama_diagnostic_response.txt
 
@@ -39,6 +40,8 @@ __pycache__/
 /build
 /dist
 /build_assets/
+# Inno Setup (Windows): wyjście kompilatora
+/dist_installer
 
 # --- IDE / OS ---
 .vscode/
